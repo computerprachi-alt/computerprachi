@@ -1,0 +1,102 @@
+- [UPSSSC PET Online Form 2026](https://sarkariresult.com.cm/upsssc-pet-2026/) – Last Date: 07 September 2026
+- [India Post GDS Online Form 2026 (23,757 Posts)](https://sarkariresult.com.cm/india-post-gds-july-2026/) – Last Date: 21 September 2026
+- [IBPS Clerk (CSA) 16th Correction / Edit Form 2026](https://sarkariresult.com.cm/ibps-clerk-16th-2026/) – Last Date: 05 September 2026
+- [UP Anganwadi Bharti Online Form 2026 (Updated)](https://sarkariresult.com.cm/up-anganwadi-bharti-2026/) – Last Date: 23 September 2026
+- [UP Special TET Online Form 2026](https://sarkariresult.com.cm/up-special-tet-2026/) – Last Date: 04 October 2026
+-
+- [JSSC 10+2 Inter Level JILCCE Online form 2026 – Last Date Today](https://sarkariresult.com.cm/jssc-102-inter-level-jilcce-2026/) – Last Date: 04 September 2026
+- [BSIP Lucknow Scientist B Online Form 2026 – Last Date Today](https://sarkariresult.com.cm/bsip-lucknow-scientist-b-2026/) – Last Date: 04 September 2026
+- [MPESB Primary and Secondary Teachers MSPSTET Online Form 2026 – Last Date Today](https://sarkariresult.com.cm/mpesb-primary-and-secondary-teachers-mspstet-2026/) – Last Date: 04 September 2026
+- [IBPS RRB 15th Online Form 2026 (13,706 Posts)](https://sarkariresult.com.cm/ibps-rrb-15th-2026/) – Last Date: 21 September 2026
+- [BPSC School Teacher TRE 4.0 Online Form 2026 (32,388 Posts)](https://sarkariresult.com.cm/bpsc-school-teacher-tre-4-0-2026/) – Last Date: 21 October 2026
+-
+- [Rajasthan Safai Karmchari Online Form 2026 (24,752 posts)](https://sarkariresult.com.cm/rajasthan-safai-karmchari-2026/) – Last Date: 28 September 2026
+- [Bank Of Baroda LBO Online Form 2026 (2482 Posts)](https://sarkariresult.com.cm/2026-bank-of-baroda-lbo-aug26/) – Last Date: 07 September 2026
+- [RRC SR Apprentice Online Form 2026 (4471 Posts)](https://sarkariresult.com.cm/rrc-sr-apprentice-2026/) – Last Date: 27 September 2026
+- [PFRDA Assistant Manager Online Form 2026](https://sarkariresult.com.cm/pfrda-assistant-manager-2026/) – Last Date: 24 September 2026
+- [Bank of Baroda SO Online Form 2026 (1100 Posts) – Start](https://sarkariresult.com.cm/bank-of-baroda-so-2026/) – Last Date: 24 September 2026
+- [MPESB MP Police SI, Subedar Online Form 2026](https://sarkariresult.com.cm/mp-police-si-subedar-2026/) – Last Date: 23 September 2026
+- [UPSSSC Computer Operator Online Form 2026](https://sarkariresult.com.cm/upsssc-computer-operator-2026/) – Last Date: 28 September 2026
+- [UPSC Geo Scientist Online Form 2027](https://sarkariresult.com.cm/upsc-geo-scientist-2027/) – Last Date: 22 September 2026
+- [SSC Junior Engineer JE Online Form 2026](https://sarkariresult.com.cm/ssc-je-2026/) – Last Date: 22 September 2026
+- [Bihar STET Online Form 2026](https://sarkariresult.com.cm/bihar-stet-2026/) – Last Date: 15 September 2026
+- [Bank of India BOI SO Online Form 2026](https://sarkariresult.com.cm/boi-so-2026/) – Last Date: 25 September 2026
+- [IIT BHU Non Teaching Online Form 2026](https://sarkariresult.com.cm/iit-bhu-non-teaching-2026/) – Last Date: 24 September 2026
+- [CONCOR MT, Assistant Officer Online Form 2026](https://sarkariresult.com.cm/concor-mt-assistant-officer-2026/) – Last Date: 30 September 2026
+- [NIC Scientific / Technical Assistant Online Form 2026](https://sarkariresult.com.cm/nic-scientific-technical-assistant-2026/) – Last Date: 30 September 2026
+- [UKSSSC Group C Various Post Online Form 2026](https://sarkariresult.com.cm/uksssc-group-c-2026/) – Last Date: 07 October 2026
+- [SBI Trade Finance Officer Online Form 2026](https://sarkariresult.com.cm/sbi-tfo-specialist-cadre-2026/) – Last Date: 19 September 2026
+- [ITBP CAPF Medical Officer Online Form 2026](https://sarkariresult.com.cm/itbp-capf-medical-officer-2026/) – Last Date: 08 September 2026
+- [UCO Bank SO Online Form 2026](https://sarkariresult.com.cm/uco-bank-so-2026/) – Last Date: 18 September 2026
+- [HPPSC HPAS Online Form 2026](https://sarkariresult.com.cm/hppsc-hpas-2026/) – Last Date: 22 September 2026
+- [MPESB Group 3 Sub Engineer & Other Post Online Form 2026](https://sarkariresult.com.cm/mpesb-group-3-sub-engineer-2026/) – Last Date: 12 September 2026
+- [ISRO ICRB Scientist / Engineer Online Form 2026](https://sarkariresult.com.cm/isro-icrb-scientist-engineer-2026/) – Last Date: 16 September 2026
+- [RRC ECOR Apprentice Online Form 2026](https://sarkariresult.com.cm/rrc-ecor-apprentice-2026/) – Last Date: 15 September 2026
+- [UKPSC Veterinary Officer Online Form 2026](https://sarkariresult.com.cm/ukpsc-veterinary-officer-2026/) – Last Date: 14 September 2026
+- [Indian Overseas Bank Security Guard Online Form 2026](https://sarkariresult.com.cm/indian-overseas-bank-security-guard-2026/) – Last Date: 14 September 2026
+- [Bihar BCECEB BSFC Various Post Online Form 2026](https://sarkariresult.com.cm/bihar-bceceb-bsfc-various-post-2026/) – Last Date: 24 September 2026
+- [Bihar BCECEB Sr. Resident/ Tutor Online Form 2026](https://sarkariresult.com.cm/bihar-bcece-sr-resident-tutor-2026/) – Last Date: 08 September 2026
+- [RCFL Management Trainee MT Online Form 2026 – Date Extend](https://sarkariresult.com.cm/rcfl-management-trainee-2026/) – Last Date: 10 September 2026
+- [PGCIL Apprentice Online Form 2026](https://sarkariresult.com.cm/pgcil-apprentice-2026/) – Last Date: 10 September 2026
+- [NTPC NSPCL Various Post Online Form 2026](https://sarkariresult.com.cm/ntpc-nspcl-various-post-2026/) – Last Date: 22 September 2026
+- [UPSC EPFO / APFC Online Form 2026](https://sarkariresult.com.cm/upsc-epfo-2026/) – Last Date: 11 September 2026
+- [NTPC NGEL Engineer and Executive Post Online Form 2026](https://sarkariresult.com.cm/ntpc-ngel-engineer-and-executive-post-2026/) – Last Date: 07 September 2026
+- [RRB Junior Engineer JE Online Form 2026 (4029 Posts)](https://sarkariresult.com.cm/rrb-je-2026/) – Last Date: 13 September 2026
+- [RSSB Junior Engineer Online Form 2026](https://sarkariresult.com.cm/rssb-junior-engineer-2026/) – Last Date: 14 September 2026
+- [MP High Court Assistant Grade III Online Form 2026](https://sarkariresult.com.cm/mp-high-court-assistant-grade-iii-2026/) – Last Date: 15 September 2026
+- [UPSSSC Junior Engineer JE (Agriculture) Online Form 2026](https://sarkariresult.com.cm/upsssc-junior-engineer-je-agriculture-2026/) – Last Date: 07 October 2026
+- [UPSSSC Veterinary Pharmacist Online Form 2026](https://sarkariresult.com.cm/upsssc-veterinary-pharmacist-2026/) – Last Date: 05 October 2026
+- [GIMS Noida Staff Nurse Online Form 2026](https://sarkariresult.com.cm/gims-noida-staff-nurse-2026/) – Last Date: 07 September 2026
+- [UPSSSC Livestock Extension Officer Online Form 2026](https://sarkariresult.com.cm/upsssc-leo-2026/) – Last Date: 29 September 2026
+- [Railway ICF Apprentice Online Form 2026](https://sarkariresult.com.cm/railway-icf-apprentice-2026/) – Last Date: 07 September 2026
+- [RCF Kapurthala Apprentice Online Form 2026](https://sarkariresult.com.cm/rcf-kapurthala-apprentice-2026/) – Last Date: 05 September 2026
+- [Himachal Pradesh High Court Various Post Online Form 2026](https://sarkariresult.com.cm/himachal-pradesh-high-court-various-post-2026/) – Last Date: 10 September 2026
+- [IOCL Marketing Division NR Apprentice Online Form 2026](https://sarkariresult.com.cm/iocl-md-nr-apprentice-2026/) – Last Date: 06 September 2026
+- [AAI Junior Executive & Manager Online Form 2026](https://sarkariresult.com.cm/aai-junior-executive-manager-2026/) – Last Date: 07 September 2026
+- [UPSSSC OTR One Time Registration Online Form 2026](https://sarkariresult.com.cm/upsssc-otr-2026/)
+- [RSSB Support Engineer Online Form 2025 (1050 Posts)](https://sarkariresult.com.cm/rssb-support-engineer-recruitment-2025/) – Last Date: Available Soon
+- [Bihar STET 2025 Father Name Correction – Link Active](https://sarkariresult.com.cm/bihar-stet-2025/)
+- [UPSSSC Junior Assistant, Clerk Grade II 2023 DV Document Upload](https://sarkariresult.com.cm/upsssc-jr-assistant-08-2023/)
+- [यूपी पुलिस में होगी 1 लाख नई भर्तियां, छात्रों को मिलेगा मौका](https://sarkariresult.com.cm/up-police-100000-new-bharti-2026/) – Last Date: NA
+- [UP Police SI Syllabus / Exam Pattern 2025](https://sarkariresult.com.cm/up-police-si-syllabus-exam-pattern-2025/)
+- [UP Polytechnic JEECUP Online Counseling 2025](https://sarkariresult.com.cm/up-polytechnic-jeecup-online-counseling-2025/)
+- [MP Anganwadi Online Form 2025](https://sarkariresult.com.cm/mp-anganwadi-recruitment-2025/)
+- [Bihar SHS Ayush Medical Officer Online Form 2025](https://sarkariresult.com.cm/bihar-shs-ayush-medical-officer-recruitment-2025-start/)
+- [Rajasthan Police Constable Telecommunication Correction / Edit Form 2025 – Extend](https://sarkariresult.com.cm/rajasthan-police-constable-telecommunication-online-form-2025-correction-last-date/)
+- [MP High Court Class IV Online Form 2025 – Start](https://sarkariresult.com.cm/mp-high-court-mphc-class-iv-recruitment-2025-start/)
+- [BSSC Laboratory Assistant Online Form 2025](https://sarkariresult.com.cm/bssc-laboratory-assistant-recruitment-2025/)
+- [CSIR IITR Junior Stenographer Online Form 2025](https://sarkariresult.com.cm/csir-iitr-junior-stenographer-recruitment-2025/)
+- [Army 10+2 TES 54 Online Form 2025 – Start](https://sarkariresult.com.cm/army-102-tes-54-recruitment-2025/)
+- [UPPSC Various Post Direct Online Form 2025](https://sarkariresult.com.cm/uppsc-various-post-direct-recruitment-2025/)
+- [CSIR NBRI Lucknow Various Post Online Form 2025](https://sarkariresult.com.cm/csir-nbri-lucknow-various-post-recruitment-2025/)
+- [KGMU Nursing Officer Online Form 2025 – Start](https://sarkariresult.com.cm/kgmu-nursing-officer-recruitment-2025-start/)
+- [UIIC Apprentice Online Form 2025](https://sarkariresult.com.cm/uiic-apprentice-recruitment-2025/)
+- [BHU Junior Clerk Online Form 2025 – Date Extend](https://sarkariresult.com.cm/bhu-junior-clerk-recruitment-2025-date-extend/)
+- [Allahabad University Teaching Online Form 2025](https://sarkariresult.com.cm/allahabad-university-teaching-recruitment-2025/)
+- [UKSSSC Assistant Accountant and Other Post Online Form 2025](https://sarkariresult.com.cm/uksssc-assistant-accountant-and-other-post-recruitment-2025/)
+- [Bihar CET B.Ed Online Form 2025 – Start](https://sarkariresult.com.cm/bihar-cet-b-ed-online-form-2025/)
+- [MPPSC Food Safety Officer FSO Online Form 2025](https://sarkariresult.com.cm/mppsc-food-safety-officer-fso-recruitment-2025/)
+- [UP Police Jail Warder Online Form 2025](https://sarkariresult.com.cm/up-police-jail-warder-recruitment-2025/)
+- [NCRTC Various Post Vacancy Cancelled Notice 2025](https://sarkariresult.com.cm/ncrtc-various-post-vacancy-cancelled-notice-2025/)
+- [UPPSC Various Post Online Form 2025](https://sarkariresult.com.cm/uppsc-various-post-recruitment-2025/)
+- [Allahabad High Court Research Associates Online Form 2025 – Start](https://sarkariresult.com.cm/allahabad-high-court-research-associates-recruitment-2025-start/)
+- [Rail Wheel Factory RWF Apprentices Online Form 2025](https://sarkariresult.com.cm/rail-wheel-factory-rwf-apprentices-online-form-2025/)
+- [UPSC Assistant Professor Online Form 2025](https://sarkariresult.com.cm/upsc-assistant-professor-online-form-2025/)
+- [Union Bank of India Apprentice Online Form 2025 – Date Extend](https://sarkariresult.com.cm/union-bank-of-india-apprentice-recruitment-2025-date-extend/)
+- [MPPSC Assistant Professor Online Form 2025](https://sarkariresult.com.cm/madhya-pradesh-mppsc-assistant-professor-recruitment-2025/)
+- [Indian Overseas Bank IOB Apprentice Online Form 2025](https://sarkariresult.com.cm/indian-overseas-bank-iob-apprentice-recruitment-2025/)
+- [IFFCO Apprentice Online Form 2025](https://sarkariresult.com.cm/iffco-apprentice-recruitment-2025-2/)
+- [SECL Apprentice Online Form 2025](https://sarkariresult.com.cm/secl-apprentice-recruitment-2025/)
+- [ Indian Army NCC Special Entry Scheme 58th Course Online Form 2025](https://sarkariresult.com.cm/indian-army-ncc-special-entry-scheme-58th-course-recruitment-2025/)
+- [MP Rojgar Panjiyan Online Form 2025](https://sarkariresult.com.cm/mp-rojgar-panjiyan-online-form-2025/)
+- [Indian Navy SSC Officer January Online Form 2025](https://sarkariresult.com.cm/indian-navy-ssc-officer-january-recruitment-2025/)
+- [NTPC Assistant Executive Online Form 2025](https://sarkariresult.com.cm/ntpc-assistant-executive-recruitment-2025/)
+- [UP Anganwadi Online Form 2024](https://sarkariresult.com.cm/up-aganwadi-recruitment-2024-apply-now/)
+- [CSIR IICT Junior Secretariat Assistant Online Form 2025](https://sarkariresult.com.cm/csir-iict-junior-secretariat-assistant-recruitment-2025/)
+- [IOCL Apprentice Online Form 2025](https://sarkariresult.com.cm/iocl-apprentice-recruitment-2025/)
+- [Indian Air Force Airmen Group-Y Online Form 2025](https://sarkariresult.com.cm/indian-air-force-airmen-group-y-recruitment-2025/)
+- [Railway RRC NER Gorakhpur Apprentice Online Form 2025](https://sarkariresult.com.cm/railway-rrc-ner-gorakhpur-apprentice-recruitment-2025/)
+- [MPESB Group 4 Online Form 2025](https://sarkariresult.com.cm/mpesb-group-4-recruitment-2025/)
+- [Bombay High Court Clerk Online Form 2025](https://sarkariresult.com.cm/bombay-high-court-clerk-recruitment-2025/)
+- [BHEL Engineer Trainee and Supervisor Trainee Online Form 2025](https://sarkariresult.com.cm/bhel-engineer-trainee-and-supervisor-trainee-recruitment-2025/)
+- [Mazagon Dock MDL Graduate/ Diploma Apprentice Online Form 2025](https://sarkariresult.com.cm/mazagon-dock-mdl-graduate-diploma-apprentice-recruitment-2025/)
