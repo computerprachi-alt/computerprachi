@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 BASE=Path(__file__).resolve().parent
 SOURCE='https://sarkariresult.com.cm/'
-CATEGORIES={'Latest Jobs':('jobs','job.html'),'Results':('results','result.html'),'Admit Cards':('admit','detail.html'),'Answer Key':('answer','detail.html'),'Admission':('admission','detail.html'),'10th/ITI Jobs':('iti','detail.html'),'Outsourcing Jobs':('outsourcing','detail.html'),'Syllabus':('syllabus','detail.html')}
+CATEGORIES={'Latest Jobs':('jobs','job.html'),'Results':('results','result.html'),'Admit Cards':('admit','detail.html'),'Answer Key':('answer','detail.html'),'Admission':('admission','detail.html'),'10th/ITI Jobs':('iti','detail.html'),'Outsourcing Jobs':('outsourcing','detail.html'),'Syllabus':('syllabus','detail.html'),'Documents':('documents','detail.html')}
 def clean(s): return re.sub(r'\s+',' ',s or '').strip()
 def fetch():
  r=requests.get(SOURCE,timeout=30,headers={'User-Agent':'Mozilla/5.0 (compatible; ComputerPrachiAutoUpdater/1.0)'}); r.raise_for_status(); return BeautifulSoup(r.text,'html.parser')
@@ -36,7 +36,7 @@ def replace_marker(text,marker,new):
  return pat.sub(f'<!-- AUTO:{marker}:START -->\n{new}\n<!-- AUTO:{marker}:END -->',text,count=1)
 def add_index_markers(p):
  text=p.read_text(encoding='utf-8')
- for sid in ['jobs','result','admit','answer','admission','syllabus']:
+ for sid in ['jobs','result','admit','answer','admission','syllabus','documents','iti','outsourcing','updates']:
   pat=re.compile(rf'(<section[^>]*id="{sid}"[^>]*>.*?<h2>.*?</h2>)<ul>(.*?)</ul>',re.S|re.I)
   m=pat.search(text)
   if m and f'<!-- AUTO:{sid}:START -->' not in text:
@@ -45,8 +45,13 @@ def add_index_markers(p):
 def update_index(items):
  p=BASE/'index.html'; text=add_index_markers(p)
  for heading,(kind,_) in CATEGORIES.items():
-  if kind not in ['jobs','results','admit','answer','admission','syllabus']: continue
+  if kind not in ['jobs','results','admit','answer','admission','syllabus','documents','iti','outsourcing']: continue
   text=replace_marker(text,kind,list_html(items[heading][:25],kind))
+ # Keep Latest Update as a mixed feed from the same source categories.
+ latest=[]
+ for kk in ['Results','Admit Cards','Latest Jobs','Answer Key','Documents','Admission','10th/ITI Jobs','Outsourcing Jobs','Syllabus']:
+  latest += items.get(kk,[])[:5]
+ text=replace_marker(text,'updates',list_html(latest[:25],'answer'))
  p.write_text(text,encoding='utf-8')
 def update_page(filename,kind,items):
  p=BASE/filename
@@ -65,6 +70,9 @@ def main():
  soup=fetch(); items={h:section_items(soup,h) for h in CATEGORIES}
  if not items['Latest Jobs'] and not items['Results'] and not items['Admit Cards']: raise RuntimeError('No recognizable source data; refusing to overwrite site.')
  update_index(items); update_page('all-jobs.html','jobs',items['Latest Jobs']); update_page('all-results.html','results',items['Results'])
- create_page('all-admit-card.html','All Admit Cards','admit',items['Admit Cards']); create_page('all-answer-key.html','All Answer Keys','answer',items['Answer Key']); create_page('all-admission.html','All Admission / Online Forms','admission',items['Admission']); create_page('all-iti-jobs.html','All 10th / ITI Jobs','iti',items['10th/ITI Jobs']); create_page('all-outsourcing-jobs.html','All Outsourcing Jobs','outsourcing',items['Outsourcing Jobs']); create_page('all-syllabus.html','All Syllabus','syllabus',items['Syllabus'])
+ create_page('all-admit-card.html','All Admit Cards','admit',items['Admit Cards']); create_page('all-answer-key.html','All Answer Keys','answer',items['Answer Key']); create_page('all-admission.html','All Admission / Online Forms','admission',items['Admission']); create_page('all-iti-jobs.html','All 10th / ITI Jobs','iti',items['10th/ITI Jobs']); create_page('all-outsourcing-jobs.html','All Outsourcing Jobs','outsourcing',items['Outsourcing Jobs']); create_page('all-syllabus.html','All Syllabus','syllabus',items['Syllabus']); create_page('all-documents-verification.html','All Documents Verification','documents',items['Documents']); create_page('all-latest-update.html','All Latest Updates','latest-update',[]); latest_update_items=[]
+ for kk in ['Results','Admit Cards','Latest Jobs','Answer Key','Documents','Admission','10th/ITI Jobs','Outsourcing Jobs','Syllabus']:
+  latest_update_items += items.get(kk,[])[:5]
+ update_page('all-latest-update.html','latest-update',latest_update_items)
  print({k:len(v) for k,v in items.items()})
 if __name__=='__main__': main()
