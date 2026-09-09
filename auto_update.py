@@ -179,7 +179,7 @@ def extract_category(url, heading_hint):
         "Results": ("all latest examination result", "all latest result", "latest result", "result"),
         "Admit Cards": ("all latest admit card", "admit card"),
         "Answer Key": ("all latest answer key", "answer key"),
-        "Admission": ("all latest admission",),
+        "Admission": ("all latest admission", "admission"),
         "10th/ITI Jobs": ("all latest 10th", "10th/iti"),
         "Outsourcing Jobs": ("all latest outsourcing", "outsourcing"),
         "Syllabus": ("all latest syllabus",),
