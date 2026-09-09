@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://computerprachi-alt.github.io/computerprachi/sitemap.xml

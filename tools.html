@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Computer Prachi Tools</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f3f3;color:#222}.wrap{max-width:944px;margin:auto;background:#fff;min-height:100vh}.top{background:#c00;color:#fff;padding:10px 18px;font-size:20px;font-weight:700}.head{padding:16px 18px}.head h1{margin:0;color:#08256b;font-size:32px}.head p{margin:5px 0;color:#c00}.nav{background:#07145c;display:flex;flex-wrap:wrap;padding:0 10px}.nav a{color:#fff;text-decoration:none;padding:12px 14px;font-weight:700;font-size:13px}.nav a:hover{background:#10247d}.box{margin:18px;border:1px solid #ddd}.box h2{margin:0;background:#07145c;color:#fff;text-align:center;padding:10px;font-size:20px}.tools{padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.tool{display:block;text-decoration:none;border:1px solid #ddd;background:#fafafa;padding:14px 16px;font-size:16px;font-weight:700;color:#111;border-left:5px solid #d71920;cursor:pointer}.tool:hover{background:#eef3ff;color:#07145c}.panel{display:none;margin:18px;border:1px solid #ddd;padding:18px;background:#fff}.panel:target{display:block}.panel h3{margin:-18px -18px 15px;background:#d71920;color:#fff;padding:10px;text-align:center}.field{margin:10px 0}.field label{display:block;font-weight:700;margin-bottom:5px}.field input,.field textarea,.field select{width:100%;padding:9px;border:1px solid #bbb;border-radius:3px;font-size:14px}.btn{background:#07851b;color:#fff;border:0;padding:10px 15px;border-radius:4px;font-weight:700;cursor:pointer;margin:4px}.btn.blue{background:#0875c9}.btn.gray{background:#555}.preview{margin-top:15px;border:1px solid #bbb;padding:18px;background:#fff}.resume-preview h2,.bio-preview h2{text-align:center;margin-top:0;color:#08256b}.photo-preview{text-align:center}.photo-preview img{max-width:100%;border:1px solid #aaa}.canvas-wrap{text-align:center}.canvas-wrap canvas{max-width:100%;border:1px solid #aaa}.result{margin-top:12px;padding:10px;background:#f5f8ff;border:1px solid #cbd7ee;font-weight:700}.typing-text{padding:14px;background:#f7f7f7;border:1px solid #ccc;line-height:1.8}.typing-text span{white-space:pre-wrap}.typing-input{min-height:120px}.timer{font-size:28px;text-align:center;font-weight:700;color:#c00;margin:10px}.small{font-size:12px;color:#666}.tool-back{margin:0 18px 18px}.join-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:650px){.tools,.join-grid{grid-template-columns:1fr}.head h1{font-size:26px}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style id="cp-live-clock-style">
+.cp-live-clock{
+  position:absolute;right:145px;top:6px;z-index:9999;
+  display:flex;align-items:center;gap:5px;
+  font:600 11px/1.1 Arial,sans-serif;color:#fff;
+  white-space:nowrap;
+}
+.cp-live-clock .cp-time{
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:13px;padding:4px 8px;
+}
+.cp-live-clock .cp-date{opacity:.9}
+@media(max-width:900px){
+  .cp-live-clock{right:118px;font-size:10px}
+  .cp-live-clock .cp-date{display:none}
+}
+@media(max-width:700px){
+  .cp-live-clock{right:8px;top:4px}
+  .cp-live-clock .cp-date{display:none}
+  .cp-live-clock .cp-time{padding:4px 7px}
+}
+</style>
+</head>
+<body><div id="cp-live-clock" class="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div>
+<div class="wrap">
+<div class="top">Computer Prachi – Computer Prachi Tools</div>
+<div class="head"><h1>Computer Prachi</h1><p>Useful Online Tools for Students</p></div>
+<div class="nav"><a href="index.html">⌂ Home</a><a href="index.html#jobs">Latest Jobs</a><a href="index.html#result">Results</a><a href="index.html#admission">Admission</a></div>
+<div class="box"><h2>Computer Prachi Tools</h2><div class="tools">
+<a class="tool" href="#image-resizer">Image Resizer</a>
+<a class="tool" href="#marriage-biodata">1. Shadi / Marriage Bio Data Maker</a>
+<a class="tool" href="#resume">2. Resume/CV Maker</a>
+<a class="tool" href="#jpg-pdf">3. JPG to PDF Converter</a>
+<a class="tool" href="#typing">4. Typing Test</a>
+<a class="tool" href="#age">5. Age Calculator</a>
+<a class="tool" href="#percentage">7. Percentage Calculator</a>
+<a class="tool" href="#cgpa">8. CGPA to Percentage</a>
+<a class="tool" href="#date-difference">9. Date Difference</a>
+<a class="tool" href="#countdown">10. Exam Countdown</a>
+<a class="tool" href="#photo-name-date">6. Name &amp; Date on Photo Maker</a>
+<a class="tool" href="#photo-signature">7. Photo Signature Joiner</a>
+</div></div>
+
+<section id="image-resizer" class="panel"><h3>Image Resizer</h3><div class="field"><label>Select Image</label><input type="file" id="resizeFile" accept="image/*"></div><div class="join-grid"><div class="field"><label>Width (px)</label><input id="resizeW" type="number" min="1"></div><div class="field"><label>Height (px)</label><input id="resizeH" type="number" min="1"></div></div><button class="btn" onclick="resizeImage()">Resize &amp; Download</button><div id="resizeMsg" class="result"></div></section>
+
+<section id="marriage-biodata" class="panel"><h3>Shadi / Marriage Bio Data Maker</h3><div class="join-grid"><div class="field"><label>Name</label><input id="bioName"></div><div class="field"><label>Date of Birth</label><input id="bioDob" type="date"></div><div class="field"><label>Father's Name</label><input id="bioFather"></div><div class="field"><label>Mother's Name</label><input id="bioMother"></div><div class="field"><label>Education</label><input id="bioEdu"></div><div class="field"><label>Occupation</label><input id="bioJob"></div><div class="field"><label>Address</label><input id="bioAddress"></div><div class="field"><label>Mobile</label><input id="bioMobile"></div></div><button class="btn" onclick="makeBio()">Create Bio Data</button><button class="btn blue" onclick="printArea('bioPreview')">Print / Save PDF</button><div id="bioPreview" class="preview bio-preview"></div></section>
+
+<section id="resume" class="panel"><h3>Resume/CV Maker</h3><div class="join-grid"><div class="field"><label>Full Name</label><input id="cvName"></div><div class="field"><label>Mobile / Email</label><input id="cvContact"></div><div class="field"><label>Career Objective</label><textarea id="cvObjective"></textarea></div><div class="field"><label>Education</label><textarea id="cvEducation"></textarea></div><div class="field"><label>Skills</label><textarea id="cvSkills"></textarea></div><div class="field"><label>Experience</label><textarea id="cvExperience"></textarea></div></div><button class="btn" onclick="makeResume()">Create Resume</button><button class="btn blue" onclick="printArea('cvPreview')">Print / Save PDF</button><div id="cvPreview" class="preview resume-preview"></div></section>
+
+<section id="jpg-pdf" class="panel"><h3>JPG to PDF Converter</h3><div class="field"><label>Select JPG / PNG Images</label><input id="pdfFiles" type="file" accept="image/jpeg,image/png" multiple></div><button class="btn" onclick="jpgToPdf()">Convert &amp; Download PDF</button><div id="pdfMsg" class="result"></div></section>
+
+<section id="typing" class="panel"><h3>Typing Test</h3><div class="timer" id="typingTimer">60</div><div class="typing-text" id="typingText">India is a diverse country with many languages, cultures and traditions. Computer Prachi provides useful information, government job updates and online tools for students.</div><div class="field"><label>Type the text above</label><textarea id="typingInput" class="typing-input" disabled></textarea></div><button class="btn" id="typingStart" onclick="startTyping()">Start Test</button><div id="typingResult" class="result"></div></section>
+
+<section id="percentage" class="panel"><h3>Percentage Calculator</h3><div class="join-grid"><div class="field"><label>Obtained Marks</label><input id="pctObt" type="number" min="0"></div><div class="field"><label>Total Marks</label><input id="pctTotal" type="number" min="1"></div></div><button class="btn" onclick="calcPercentage()">Calculate</button><div id="pctResult" class="result"></div></section>
+<section id="cgpa" class="panel"><h3>CGPA to Percentage</h3><div class="field"><label>CGPA (10 point scale)</label><input id="cgpaValue" type="number" min="0" max="10" step="0.01"></div><button class="btn" onclick="calcCgpa()">Convert</button><div id="cgpaResult" class="result"></div><p class="small">Common formula: Percentage = CGPA × 9.5. Check your board/university rules if a different formula is specified.</p></section>
+<section id="date-difference" class="panel"><h3>Date Difference Calculator</h3><div class="join-grid"><div class="field"><label>Start Date</label><input id="dateStart" type="date"></div><div class="field"><label>End Date</label><input id="dateEnd" type="date"></div></div><button class="btn" onclick="dateDifference()">Calculate</button><div id="dateResult" class="result"></div></section>
+<section id="countdown" class="panel"><h3>Exam Countdown</h3><div class="field"><label>Exam Date &amp; Time</label><input id="countdownDate" type="datetime-local"></div><button class="btn" onclick="startCountdown()">Start Countdown</button><div id="countdownResult" class="result"></div></section>
+<section id="age" class="panel"><h3>Age Calculator</h3><div class="field"><label>Date of Birth</label><input id="ageDob" type="date"></div><button class="btn" onclick="calculateAge()">Calculate Age</button><div id="ageResult" class="result"></div></section>
+
+<section id="photo-name-date" class="panel"><h3>Name &amp; Date on Photo Maker</h3><div class="field"><label>Select Photo</label><input id="namePhoto" type="file" accept="image/*"></div><div class="join-grid"><div class="field"><label>Name</label><input id="photoName" placeholder="Your Name"></div><div class="field"><label>Date</label><input id="photoDate" type="date"></div></div><button class="btn" onclick="makeNameDatePhoto()">Create &amp; Download</button><div id="namePhotoOut" class="canvas-wrap"></div></section>
+
+<section id="photo-signature" class="panel"><h3>Photo Signature Joiner</h3><div class="join-grid"><div class="field"><label>Photo</label><input id="joinPhoto" type="file" accept="image/*"></div><div class="field"><label>Signature</label><input id="joinSign" type="file" accept="image/*"></div></div><button class="btn" onclick="joinPhotoSignature()">Join &amp; Download</button><div id="joinOut" class="canvas-wrap"></div></section>
+<div class="tool-back"><a class="btn gray" href="index.html">← Back to Computer Prachi</a></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function loadImage(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
+async function resizeImage(){const f=$('resizeFile').files[0];if(!f)return $('resizeMsg').textContent='Please select an image.';const img=await loadImage(f);const w=parseInt($('resizeW').value)||img.width,h=parseInt($('resizeH').value)||img.height;const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='computer-prachi-resized.jpg';a.click();URL.revokeObjectURL(a.href);$('resizeMsg').textContent='Resized image downloaded.'},'image/jpeg',.9)}
+function makeBio(){$('bioPreview').innerHTML='<h2>Marriage Bio Data</h2><p><b>Name:</b> '+esc($('bioName').value)+'</p><p><b>Date of Birth:</b> '+esc($('bioDob').value)+'</p><p><b>Father\'s Name:</b> '+esc($('bioFather').value)+'</p><p><b>Mother\'s Name:</b> '+esc($('bioMother').value)+'</p><p><b>Education:</b> '+esc($('bioEdu').value)+'</p><p><b>Occupation:</b> '+esc($('bioJob').value)+'</p><p><b>Address:</b> '+esc($('bioAddress').value)+'</p><p><b>Mobile:</b> '+esc($('bioMobile').value)+'</p>'}
+function makeResume(){$('cvPreview').innerHTML='<h2>'+esc($('cvName').value)+'</h2><p style="text-align:center">'+esc($('cvContact').value)+'</p><hr><h3>Career Objective</h3><p>'+esc($('cvObjective').value).replace(/\n/g,'<br>')+'</p><h3>Education</h3><p>'+esc($('cvEducation').value).replace(/\n/g,'<br>')+'</p><h3>Skills</h3><p>'+esc($('cvSkills').value).replace(/\n/g,'<br>')+'</p><h3>Experience</h3><p>'+esc($('cvExperience').value).replace(/\n/g,'<br>')+'</p>'}
+function printArea(id){
+  const el=$(id);
+  if(!el) return;
+  const w=window.open('','_blank','width=900,height=700');
+  if(!w){ alert('Please allow pop-ups to print/save PDF.'); return; }
+  w.document.open();
+  w.document.write('<!doctype html><html><head><meta charset=\"utf-8\"><title>Computer Prachi</title><style>body{font-family:Arial,sans-serif;padding:30px;line-height:1.6;color:#222}h2{color:#08256b;text-align:center}h3{border-bottom:1px solid #ccc;padding-bottom:5px}button,a{display:none!important}</style></head><body>');
+  w.document.write(el.innerHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function(){w.print();},400);
+}
+async function jpgToPdf(){const fs=[...$('pdfFiles').files];if(!fs.length)return $('pdfMsg').textContent='Please select JPG/PNG images.';if(!window.jspdf)return $('pdfMsg').textContent='PDF library could not load. Please refresh and try again.';const {jsPDF}=window.jspdf;let doc=null;for(const f of fs){const img=await loadImage(f);const ratio=img.width/img.height;let pw=190,ph=pw/ratio;if(ph>270){ph=270;pw=ph*ratio}if(!doc)doc=new jsPDF('p','mm','a4');else doc.addPage();doc.addImage(img,'JPEG',(210-pw)/2,(297-ph)/2,pw,ph)}doc.save('computer-prachi-images.pdf');$('pdfMsg').textContent='PDF downloaded successfully.'}
+let typingSeconds=60,typingRunning=false,typingInterval;function startTyping(){if(typingRunning)return;typingRunning=true;$('typingInput').disabled=false;$('typingInput').value='';$('typingInput').focus();typingSeconds=60;$('typingTimer').textContent=typingSeconds;$('typingResult').textContent='';typingInterval=setInterval(()=>{typingSeconds--; $('typingTimer').textContent=typingSeconds;if(typingSeconds<=0)finishTyping()},1000)}function finishTyping(){clearInterval(typingInterval);typingRunning=false;$('typingInput').disabled=true;const target=$('typingText').textContent.trim(),typed=$('typingInput').value.trim();let correct=0;for(let i=0;i<Math.min(target.length,typed.length);i++)if(target[i]===typed[i])correct++;const words=typed?typed.split(/\s+/).length:0;const mins=(60-typingSeconds)/60||1;$('typingResult').textContent='WPM: '+Math.round(words/mins)+' | Accuracy: '+Math.round(correct/Math.max(typed.length,1)*100)+'%'}
+function calculateAge(){const d=new Date($('ageDob').value);if(isNaN(d))return $('ageResult').textContent='Please select your date of birth.';const n=new Date();if(d>n)return $('ageResult').textContent='Date of birth cannot be in the future.';let y=n.getFullYear()-d.getFullYear(),m=n.getMonth()-d.getMonth(),day=n.getDate()-d.getDate();if(day<0){m--;day+=new Date(n.getFullYear(),n.getMonth(),0).getDate()}if(m<0){y--;m+=12}$('ageResult').textContent='Your age is '+y+' years, '+m+' months, '+day+' days.'}
+async function makeNameDatePhoto(){const f=$('namePhoto').files[0];if(!f)return alert('Please select a photo.');const img=await loadImage(f),c=document.createElement('canvas');c.width=img.width;c.height=img.height;c.getContext('2d').drawImage(img,0,0);const x=c.getContext('2d');x.fillStyle='rgba(0,0,0,.65)';x.fillRect(0,c.height-70,c.width,70);x.fillStyle='#fff';x.font='bold '+Math.max(18,Math.floor(c.width/22))+'px Arial';x.fillText(($('photoName').value||'Name')+'  '+($('photoDate').value||''),20,c.height-25);$('namePhotoOut').innerHTML='';const out=new Image();out.src=c.toDataURL('image/jpeg',.92);out.style.maxWidth='100%';$('namePhotoOut').appendChild(out);const a=document.createElement('a');a.href=out.src;a.download='computer-prachi-name-date.jpg';a.textContent=' Download';a.className='btn';$('namePhotoOut').appendChild(document.createElement('br'));$('namePhotoOut').appendChild(a)}
+async function joinPhotoSignature(){const pf=$('joinPhoto').files[0],sf=$('joinSign').files[0];if(!pf||!sf)return alert('Please select both photo and signature.');const p=await loadImage(pf),s=await loadImage(sf),c=document.createElement('canvas');c.width=Math.max(p.width,s.width);c.height=p.height+s.height+20;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(p,(c.width-p.width)/2,0);let sw=Math.min(s.width,c.width-40),sh=s.height*(sw/s.width);x.drawImage(s,(c.width-sw)/2,p.height+20,sw,sh);const out=document.createElement('img');out.src=c.toDataURL('image/jpeg',.92);out.style.maxWidth='100%';$('joinOut').innerHTML='';$('joinOut').appendChild(out);const a=document.createElement('a');a.href=out.src;a.download='computer-prachi-photo-signature.jpg';a.textContent=' Download';a.className='btn';$('joinOut').appendChild(document.createElement('br'));$('joinOut').appendChild(a)}
+function calcPercentage(){const o=+($('pctObt').value),t=+($('pctTotal').value);if(!t||o<0)return $('pctResult').textContent='Enter valid marks.';$('pctResult').textContent='Percentage: '+((o/t)*100).toFixed(2)+'%';}
+function calcCgpa(){const c=+($('cgpaValue').value);if(c<0||c>10)return $('cgpaResult').textContent='Enter CGPA between 0 and 10.';$('cgpaResult').textContent='Approx. Percentage: '+(c*9.5).toFixed(2)+'%';}
+function dateDifference(){const a=$('dateStart').value,b=$('dateEnd').value;if(!a||!b)return $('dateResult').textContent='Select both dates.';const d=Math.round((new Date(b)-new Date(a))/86400000);$('dateResult').textContent=d>=0?'Difference: '+d+' day(s)':'End date must be after start date.';}
+let countdownTimer;function startCountdown(){clearInterval(countdownTimer);const v=$('countdownDate').value;if(!v)return $('countdownResult').textContent='Select an exam date.';const target=new Date(v).getTime();function tick(){const diff=target-Date.now();if(diff<=0){$('countdownResult').textContent='🎉 Exam time has arrived!';clearInterval(countdownTimer);return}const d=Math.floor(diff/86400000),h=Math.floor(diff%86400000/3600000),m=Math.floor(diff%3600000/60000),s=Math.floor(diff%60000/1000);$('countdownResult').textContent=d+' days '+h+' hours '+m+' minutes '+s+' seconds remaining';}tick();countdownTimer=setInterval(tick,1000);}
+</script></body></html>

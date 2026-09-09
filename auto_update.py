@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+"""
+Computer Prachi automatic updater - category-isolated version.
+
+Each category is fetched from its own source category page so an item such as
+"UPTET 2026 Certificate" stays in Results and is not copied into Jobs,
+Admit Card, Syllabus, Admission, etc.
+"""
+import re
+import socket
+from pathlib import Path
+from urllib.parse import quote
+from datetime import datetime
+
+import requests
+from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+BASE = Path(__file__).resolve().parent
+ROOT = "https://sarkariresult.com.cm"
+# Cloudflare currently serves this domain on these IPv4 addresses.
+# GitHub Actions can occasionally fail to resolve the domain through its
+# runner DNS; the updater will fall back to these addresses while preserving
+# the hostname for HTTPS/SNI.
+FALLBACK_IPS = ("104.26.14.182", "104.26.15.182", "172.67.74.40")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; ComputerPrachiAutoUpdater/3.0)",
+    "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+}
+
+CATEGORIES = {
+    "Latest Jobs": ("jobs", "/latest-jobs/"),
+    "Results": ("results", "/category/result/"),
+    "Admit Cards": ("admit", "/category/admit-card/"),
+    "Answer Key": ("answer", "/category/answer-key/"),
+    "Admission": ("admission", "/category/admission/"),
+    "10th/ITI Jobs": ("iti", "/category/10th-iti-jobs/"),
+    "Outsourcing Jobs": ("outsourcing", "/category/outsourcing-jobs/"),
+    "Syllabus": ("syllabus", "/category/syllabus/"),
+    "Documents": ("documents", "/category/documents-verification/"),
+}
+
+PAGE_MAP = {
+    "jobs": "job.html",
+    "results": "result.html",
+    "admit": "admit.html",
+    "answer": "detail.html",
+    "admission": "detail.html",
+    "iti": "detail.html",
+    "outsourcing": "detail.html",
+    "syllabus": "detail.html",
+    "documents": "detail.html",
+}
+
+INDEX_ID_MAP = {
+    "jobs": "jobs",
+    "results": "result",
+    "admit": "admit",
+    "answer": "answer",
+    "admission": "admission",
+    "iti": "iti",
+    "outsourcing": "outsourcing",
+    "syllabus": "syllabus",
+    "documents": "documents",
+    "updates": "updates",
+}
+
+def clean(v):
+    return re.sub(r"\s+", " ", v or "").strip()
+
+def normalize_url(href):
+    href = (href or "").strip()
+    if not href or href.startswith("#"):
+        return ""
+    if href.startswith("//"):
+        return "https:" + href
+    if href.startswith("/"):
+        return ROOT + href
+    if href.startswith("http://"):
+        return "https://" + href[7:]
+    if not href.startswith("http"):
+        return ROOT + "/" + href.lstrip("/")
+    return href
+
+def fetch(url):
+    last = None
+    retry = Retry(
+        total=4,
+        connect=4,
+        read=4,
+        backoff_factor=2,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+        raise_on_status=False,
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.headers.update(HEADERS)
+
+    # First use normal DNS. If the runner reports a DNS failure, retry with
+    # Cloudflare's known IPv4 addresses. We patch only getaddrinfo for the
+    # source hostname, so requests still uses the real hostname in the URL
+    # and therefore keeps correct TLS/SNI and Host headers.
+    try:
+        r = session.get(url, timeout=(20, 60))
+        r.raise_for_status()
+        return BeautifulSoup(r.text, "html.parser")
+    except Exception as exc:
+        last = exc
+
+    from urllib.parse import urlparse
+    host = urlparse(url).hostname
+    if host == "sarkariresult.com.cm":
+        original_getaddrinfo = socket.getaddrinfo
+        for ip in FALLBACK_IPS:
+            def fallback_getaddrinfo(name, port, *args, _ip=ip, **kwargs):
+                if name == host:
+                    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (_ip, port))]
+                return original_getaddrinfo(name, port, *args, **kwargs)
+            try:
+                socket.getaddrinfo = fallback_getaddrinfo
+                r = session.get(url, timeout=(20, 60))
+                r.raise_for_status()
+                socket.getaddrinfo = original_getaddrinfo
+                return BeautifulSoup(r.text, "html.parser")
+            except Exception as exc:
+                last = exc
+            finally:
+                socket.getaddrinfo = original_getaddrinfo
+
+    raise RuntimeError(f"Source fetch failed: {url} :: {last}")
+
+def extract_category(url, heading_hint):
+    """Extract links belonging to the requested category page.
+
+    The source layout can put the category <ul> directly after the heading or
+    inside a wrapper <div>.  We therefore walk the DOM after the matching
+    heading and collect article links until the next major heading instead of
+    requiring a specific sibling structure.
+    """
+    soup = fetch(url)
+    out, seen = [], set()
+    wanted = {
+        "Latest Jobs": ("all latest jobs", "latest job"),
+        "Results": ("all latest examination result", "all latest result", "latest result", "result"),
+        "Admit Cards": ("all latest admit card", "admit card"),
+        "Answer Key": ("all latest answer key", "answer key"),
+        "Admission": ("all latest admission",),
+        "10th/ITI Jobs": ("all latest 10th", "10th/iti"),
+        "Outsourcing Jobs": ("all latest outsourcing", "outsourcing"),
+        "Syllabus": ("all latest syllabus",),
+        "Documents": ("all latest documents", "all latest document", "documents"),
+    }.get(heading_hint, (heading_hint.lower(),))
+
+    matched = None
+    for heading in soup.find_all(["h1", "h2", "h3", "h4"]):
+        txt = clean(heading.get_text(" ", strip=True)).lower()
+        if any(h in txt for h in wanted):
+            matched = heading
+            break
+
+    if matched is None:
+        raise RuntimeError(f"Source parsing failed for {heading_hint}: heading not found at {url}")
+
+    def add_anchor(a):
+        title = clean(a.get_text(" ", strip=True))
+        href = normalize_url(a.get("href"))
+        if not title or not href or not href.startswith(ROOT + "/"):
+            return
+        low = href.lower()
+        if any(x in low for x in ("/category/", "/tag/", "/author/", "/page/", "/feed")):
+            return
+        # Ignore obvious site/navigation links.
+        bad = {"home", "latest job", "admit card", "result", "admission", "syllabus", "answer key"}
+        if title.lower() in bad:
+            return
+        key = (title.lower(), href)
+        if key not in seen:
+            seen.add(key)
+            out.append({"title": title, "url": href})
+
+    # Walk forward through siblings.  This handles both a direct <ul> and a
+    # wrapper <div> containing the list.  Stop before the next major heading.
+    node = matched
+    steps = 0
+    while node is not None and steps < 40:
+        node = node.find_next_sibling()
+        steps += 1
+        if node is None:
+            break
+        if getattr(node, "name", None) in {"h1", "h2", "h3", "h4"}:
+            break
+        for a in node.find_all("a", href=True):
+            add_anchor(a)
+        if len(out) >= 50:
+            break
+
+    # Robust fallback: collect links in document order after the matched
+    # heading, stopping only at the next major section heading.  The source
+    # currently renders the list inside nested wrappers, so sibling traversal
+    # alone can see only a few items even though the page contains many.
+    if len(out) < 10:
+        out.clear()
+        seen.clear()
+        node = matched
+        while True:
+            node = node.find_next()
+            if node is None:
+                break
+            if getattr(node, "name", None) in {"h1", "h2"}:
+                break
+            if getattr(node, "name", None) == "a" and node.get("href"):
+                add_anchor(node)
+            if len(out) >= 50:
+                break
+
+    if len(out) < 3:
+        raise RuntimeError(
+            f"Source parsing failed for {heading_hint}: only {len(out)} items found at {url}"
+        )
+
+    return out[:50]
+
+def li(item, kind):
+    page = PAGE_MAP[kind]
+    title, url = item["title"], item["url"]
+    return (
+        '<li><span class="new">NEW</span>'
+        f'<a href="{page}?title={quote(title)}&url={quote(url, safe="")}" '
+        f'target="_self" rel="noopener">{title}</a></li>'
+    )
+
+def list_html(items, kind):
+    return "\n".join(li(x, kind) for x in items)
+
+def replace_marker(text, marker, new):
+    pattern = re.compile(
+        rf"<!-- AUTO:{re.escape(marker)}:START -->.*?"
+        rf"<!-- AUTO:{re.escape(marker)}:END -->", re.S
+    )
+    if not pattern.search(text):
+        return None
+    replacement = (
+        f"<!-- AUTO:{marker}:START -->\n{new}\n"
+        f"<!-- AUTO:{marker}:END -->"
+    )
+    return pattern.sub(replacement, text, count=1)
+
+def add_index_markers(path):
+    text = path.read_text(encoding="utf-8")
+    for kind, sid in INDEX_ID_MAP.items():
+        marker = kind
+        if f"<!-- AUTO:{marker}:START -->" in text:
+            continue
+        pat = re.compile(
+            rf'(<section[^>]*id="{re.escape(sid)}"[^>]*>.*?'
+            rf'<h2>.*?</h2>)<ul>(.*?)</ul>', re.S | re.I
+        )
+        m = pat.search(text)
+        if m:
+            wrapped = (
+                m.group(1) + f'<ul><!-- AUTO:{marker}:START -->'
+                + m.group(2)
+                + f'<!-- AUTO:{marker}:END --></ul>'
+            )
+            text = text[:m.start()] + wrapped + text[m.end():]
+    path.write_text(text, encoding="utf-8")
+    return text
+
+def update_index(items):
+    path = BASE / "index.html"
+    text = add_index_markers(path)
+
+    for heading, (kind, _) in CATEGORIES.items():
+        if kind in INDEX_ID_MAP and items.get(heading):
+            updated = replace_marker(
+                text, kind, list_html(items[heading][:12], kind)
+            )
+            if updated is not None:
+                text = updated
+
+    # Mixed Latest Update is intentionally built from each real category,
+    # but each link keeps its own correct destination page.
+    latest = []
+    for heading in (
+        "Results", "Admit Cards", "Latest Jobs", "Answer Key",
+        "Documents", "Admission", "10th/ITI Jobs", "Outsourcing Jobs",
+        "Syllabus"
+    ):
+        latest.extend(items.get(heading, [])[:3])
+
+    # Preserve category-specific destination for mixed updates.
+    mixed = []
+    for heading in (
+        "Results", "Admit Cards", "Latest Jobs", "Answer Key",
+        "Documents", "Admission", "10th/ITI Jobs", "Outsourcing Jobs",
+        "Syllabus"
+    ):
+        kind = CATEGORIES[heading][0]
+        mixed.extend(li(x, kind) for x in items.get(heading, [])[:3])
+
+    updated = replace_marker(text, "updates", "\n".join(mixed[:18]))
+    if updated is not None:
+        text = updated
+    path.write_text(text, encoding="utf-8")
+
+def update_page(filename, kind, items):
+    path = BASE / filename
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    marker = f"<!-- AUTO:{kind}:START -->"
+
+    if marker not in text:
+        # Find the first substantial list after the first section heading.
+        m = re.search(
+            r"(<section[^>]*>.*?<h2>.*?</h2>)\s*<ul>(.*?)</ul>",
+            text, re.S | re.I
+        )
+        if not m:
+            # Try generic main-content list.
+            m = re.search(
+                r"(<main\b.*?>.*?<h2>.*?</h2>)\s*<ul>(.*?)</ul>",
+                text, re.S | re.I
+            )
+        if not m:
+            raise RuntimeError(f"Cannot add marker to {filename}")
+        wrapped = (
+            m.group(1) + f"<ul>{marker}" + m.group(2)
+            + f"<!-- AUTO:{kind}:END --></ul>"
+        )
+        text = text[:m.start()] + wrapped + text[m.end():]
+
+    updated = replace_marker(text, kind, list_html(items, kind))
+    if updated is None:
+        raise RuntimeError(f"Cannot replace marker in {filename}")
+    path.write_text(updated, encoding="utf-8")
+
+def stamp_update_date():
+    stamp = datetime.now().strftime("%d %B %Y")
+    for filename in (
+        "index.html", "all-results.html", "all-admit-card.html",
+        "all-jobs.html", "all-latest-update.html"
+    ):
+        path = BASE / filename
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        text = re.sub(
+            r"Latest update:</b>\s*[^<]+",
+            f"Latest update:</b> {stamp} — Jobs, Results और Admit Card lists refreshed.",
+            text, flags=re.I
+        )
+        path.write_text(text, encoding="utf-8")
+
+def main():
+    items = {}
+    for heading, (_, url) in CATEGORIES.items():
+        items[heading] = extract_category(ROOT + url, heading)
+        print(f"{heading}: {len(items[heading])}")
+
+    primary = sum(
+        bool(items.get(k)) for k in ("Latest Jobs", "Results", "Admit Cards")
+    )
+    if primary < 2:
+        raise RuntimeError(
+            "Source validation failed: fewer than 2 primary categories were found."
+        )
+
+    # Strong sanity check: the first items of categories should not all be
+    # identical. This prevents cross-category contamination.
+    firsts = [
+        items[k][0]["title"].lower()
+        for k in ("Latest Jobs", "Results", "Admit Cards")
+        if items.get(k)
+    ]
+    if len(firsts) >= 3 and len(set(firsts)) == 1:
+        raise RuntimeError(
+            "Source validation failed: category lists are identical; refusing to overwrite."
+        )
+
+    update_index(items)
+    update_page("all-jobs.html", "jobs", items["Latest Jobs"])
+    update_page("all-results.html", "results", items["Results"])
+    update_page("all-admit-card.html", "admit", items["Admit Cards"])
+    update_page("all-answer-key.html", "answer", items["Answer Key"])
+    update_page("all-admission.html", "admission", items["Admission"])
+    update_page("all-iti-jobs.html", "iti", items["10th/ITI Jobs"])
+    update_page("all-outsourcing-jobs.html", "outsourcing", items["Outsourcing Jobs"])
+    update_page("all-syllabus.html", "syllabus", items["Syllabus"])
+    update_page("all-documents-verification.html", "documents", items["Documents"])
+    mixed_all = []
+    for heading in ("Results", "Admit Cards", "Latest Jobs", "Answer Key", "Documents", "Admission", "10th/ITI Jobs", "Outsourcing Jobs", "Syllabus"):
+        kind = CATEGORIES[heading][0]
+        mixed_all.extend(items[heading][:3])
+    update_page("all-latest-update.html", "updates", mixed_all[:18])
+    stamp_update_date()
+    print("Computer Prachi category update completed successfully.")
+
+if __name__ == "__main__":
+    main()
