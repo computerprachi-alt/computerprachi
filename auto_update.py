@@ -32,7 +32,7 @@ HEADERS = {
 CATEGORIES = {
     "Latest Jobs": ("jobs", "/latest-jobs/"),
      "Results": ("results", "/result/"),
-    "Admit Cards": ("admit", "/category/admit-card/"),
+    "Admit Cards": ("admit", "/admit-card/"),
     "Answer Key": ("answer", "/category/answer-key/"),
     "Admission": ("admission", "/category/admission/"),
     "10th/ITI Jobs": ("iti", "/category/10th-iti-jobs/"),
