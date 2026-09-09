@@ -29,6 +29,12 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
 }
 
+# Reuse one HTTP session for all source pages. The previous updater created a
+# new session for every page and could spend the entire GitHub Actions timeout
+# resolving/connecting repeatedly.
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
 CATEGORIES = {
     "Latest Jobs": ("jobs", "/latest-jobs/"),
     "Results": ("results", "/category/result/"),
@@ -94,9 +100,8 @@ def fetch(url):
         allowed_methods=frozenset(["GET"]),
         raise_on_status=False,
     )
-    session = requests.Session()
-    session.mount("https://", HTTPAdapter(max_retries=retry))
-    session.headers.update(HEADERS)
+    SESSION.mount("https://", HTTPAdapter(max_retries=retry))
+    session = SESSION
 
     # First use normal DNS. If the runner reports a DNS failure, retry with
     # Cloudflare's known IPv4 addresses. We patch only getaddrinfo for the
@@ -158,7 +163,7 @@ def extract_admit_link(source_url):
 
 def enrich_admit_cards(items):
     """Attach the real external admit-card URL to each admit-card item."""
-    for item in items:
+    for item in items[:12]:
         direct = extract_admit_link(item.get("url", ""))
         if direct:
             item["official"] = direct
@@ -222,15 +227,39 @@ def extract_official_link(source_url, heading_hint):
                 candidates.append((score, href))
 
         if candidates:
-            candidates.sort(key=lambda x: (-x[0], x[1]))
+            # Prefer government/official institutional domains when several
+            # external links have the same action label. Short-link/ad domains
+            # are kept only when no better official destination exists.
+            def domain_bonus(href):
+                h = href.lower()
+                if any(d in h for d in (
+                    ".gov.in", ".nic.in", ".gov.uk", ".ac.in", ".edu.in",
+                    ".gov", ".nic", "upsssc.gov.in", "uppsc.up.nic.in",
+                    "ssc.gov.in", "upsc.gov.in", "bpsc.bih.nic.in",
+                    "nta.ac.in", "exams.nta.ac.in", "ctet.nic.in",
+                    "ibps.in", "sbi.co.in", "joinindianarmy.nic.in",
+                    "joinindiannavy.gov.in", "afcat.cdac.in",
+                    "careerindianairforce.cdac.in"
+                )):
+                    return 50
+                if any(d in h for d in ("bit.ly", "tinyurl.com", "t.me", "whatsapp.com")):
+                    return -30
+                return 0
+            candidates.sort(key=lambda x: (-(x[0] + domain_bonus(x[1])), x[1]))
             return candidates[0][1]
         return ""
     except Exception:
         return ""
 
 def enrich_official_links(items, heading_hint):
-    """Attach direct official action links used by the Computer Prachi buttons."""
-    for item in items:
+    """Attach direct official action links used by the Computer Prachi buttons.
+
+    Only the first 12 entries are enriched because those are the entries shown
+    on the homepage. All-View pages still contain the source links, while the
+    visible homepage/detail buttons get the real official destination. This
+    keeps the scheduled job fast enough for GitHub Actions.
+    """
+    for item in items[:12]:
         direct = extract_official_link(item.get("url", ""), heading_hint)
         if direct:
             item["official"] = direct
