@@ -192,7 +192,12 @@ def extract_category(url, heading_hint):
         if any(h in txt for h in wanted):
             matched = heading
             break
-
+if heading_hint == "Admission":
+    for heading in soup.find_all("h2"):
+        txt = clean(heading.get_text(" ", strip=True)).lower()
+        if txt == "admission":
+            matched = heading
+            break
     if matched is None:
         raise RuntimeError(f"Source parsing failed for {heading_hint}: heading not found at {url}")
 
