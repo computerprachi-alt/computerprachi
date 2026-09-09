@@ -33,12 +33,12 @@ CATEGORIES = {
     "Latest Jobs": ("jobs", "/latest-jobs/"),
      "Results": ("results", "/result/"),
     "Admit Cards": ("admit", "/admit-card/"),
-    "Answer Key": ("answer", "/category/answer-key/"),
-    "Admission": ("admission", "/category/admission/"),
-    "10th/ITI Jobs": ("iti", "/category/10th-iti-jobs/"),
-    "Outsourcing Jobs": ("outsourcing", "/category/outsourcing-jobs/"),
-    "Syllabus": ("syllabus", "/category/syllabus/"),
-    "Documents": ("documents", "/category/documents-verification/"),
+    "Answer Key": ("answer", "/answer-key/"),
+    "Admission": ("admission", "/admission/"),
+    "10th/ITI Jobs": ("iti", "/10th-iti-jobs/"),
+    "Outsourcing Jobs": ("outsourcing", "/outsourcing-jobs/"),
+    "Syllabus": ("syllabus", "/syllabus/"),
+    "Documents": ("documents", "/documents-verification/"),
 }
 
 PAGE_MAP = {
