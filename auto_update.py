@@ -349,9 +349,11 @@ def extract_category(url, heading_hint):
             if len(out) >= 50:
                 break
 
-    if len(out) < 3:
+    # Some source categories can legitimately contain only 1–2 entries.
+    # Do not fail the whole workflow just because a category has fewer than 3.
+    if not out:
         raise RuntimeError(
-            f"Source parsing failed for {heading_hint}: only {len(out)} items found at {url}"
+            f"Source parsing failed for {heading_hint}: no items found at {url}"
         )
 
     return out[:50]
@@ -492,24 +494,24 @@ def stamp_update_date():
 def main():
     items = {}
     for heading, (_, url) in CATEGORIES.items():
-        items[heading] = extract_category(ROOT + url, heading)
-        # Keep the source detail page as the Computer Prachi detail view,
-        # while passing the direct external action URL to its buttons.
-        # This makes Apply / Result PDF / Admit Card / Answer Key buttons
-        # open the official destination instead of the source site.
-        items[heading] = enrich_official_links(items[heading], heading)
-        if heading == "Admit Cards":
-            # Preserve the older admit-card-specific extractor as a fallback.
-            items[heading] = enrich_admit_cards(items[heading])
-        print(f"{heading}: {len(items[heading])}")
+        try:
+            items[heading] = extract_category(ROOT + url, heading)
+            # The source URL is used only for reading updates. It is NEVER
+            # exposed as a clickable button on Computer Prachi.
+            items[heading] = enrich_official_links(items[heading], heading)
+            if heading == "Admit Cards":
+                items[heading] = enrich_admit_cards(items[heading])
+            print(f"{heading}: {len(items[heading])}")
+        except Exception as exc:
+            print(f"WARNING: {heading} source unavailable; keeping existing page data: {exc}")
+            items[heading] = []
 
     primary = sum(
         bool(items.get(k)) for k in ("Latest Jobs", "Results", "Admit Cards")
     )
     if primary < 2:
-        raise RuntimeError(
-            "Source validation failed: fewer than 2 primary categories were found."
-        )
+        print("WARNING: Source server was unreachable. No existing page was overwritten.")
+        return
 
     # Strong sanity check: the first items of categories should not all be
     # identical. This prevents cross-category contamination.
