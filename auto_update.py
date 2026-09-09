@@ -254,6 +254,13 @@ if heading_hint == "Admission":
                 break
 
     if len(out) < 3:
+
+
+
+        
+
+
+        
          raise RuntimeError(
             f"Source parsing failed for {heading_hint}: only {len(out)} items found at {url}"
         )
