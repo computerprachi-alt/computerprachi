@@ -31,14 +31,14 @@ HEADERS = {
 
 CATEGORIES = {
     "Latest Jobs": ("jobs", "/latest-jobs/"),
-     "Results": ("results", "/result/"),
-    "Admit Cards": ("admit", "/admit-card/"),
-    "Answer Key": ("answer", "/answer-key/"),
-    "Admission": ("admission", "/admission/"),
-    "10th/ITI Jobs": ("iti", "/10th-iti-jobs/"),
-    "Outsourcing Jobs": ("outsourcing", "/outsourcing-jobs/"),
-    "Syllabus": ("syllabus", "/syllabus/"),
-    "Documents": ("documents", "/documents-verification/"),
+    "Results": ("results", "/category/result/"),
+    "Admit Cards": ("admit", "/category/admit-card/"),
+    "Answer Key": ("answer", "/category/answer-key/"),
+    "Admission": ("admission", "/category/admission/"),
+    "10th/ITI Jobs": ("iti", "/category/10th-iti-jobs/"),
+    "Outsourcing Jobs": ("outsourcing", "/category/outsourcing-jobs/"),
+    "Syllabus": ("syllabus", "/category/syllabus/"),
+    "Documents": ("documents", "/category/documents-verification/"),
 }
 
 PAGE_MAP = {
@@ -164,6 +164,78 @@ def enrich_admit_cards(items):
             item["official"] = direct
     return items
 
+
+def extract_official_link(source_url, heading_hint):
+    """Find the most relevant direct external official link on a source detail page."""
+    try:
+        soup = fetch(source_url)
+        category_terms = {
+            "Latest Jobs": [("apply online", 100), ("apply now", 90), ("online form", 80),
+                            ("registration", 70), ("apply", 50)],
+            "Results": [("download final result", 120), ("download result", 115), ("result pdf", 110),
+                        ("result", 80), ("score card", 75)],
+            "Admit Cards": [("download admit card", 120), ("admit card", 110), ("hall ticket", 105)],
+            "Answer Key": [("answer key", 120), ("download answer key", 115)],
+            "Admission": [("apply online", 120), ("online admission", 115), ("registration", 105),
+                          ("online form", 100), ("apply", 70)],
+            "10th/ITI Jobs": [("apply online", 100), ("apply now", 90), ("online form", 80),
+                              ("registration", 70), ("apply", 50)],
+            "Outsourcing Jobs": [("apply online", 100), ("apply now", 90), ("online form", 80),
+                                 ("registration", 70), ("apply", 50)],
+            "Syllabus": [("download syllabus", 120), ("syllabus", 100)],
+            "Documents": [("document verification", 120), ("verification", 100), ("certificate", 80)],
+        }
+        terms = category_terms.get(heading_hint, [])
+        candidates = []
+
+        # Prefer links in table rows where the left cell names the action.
+        for tr in soup.find_all("tr"):
+            row_text = clean(tr.get_text(" ", strip=True)).lower()
+            for a in tr.find_all("a", href=True):
+                href = normalize_url(a.get("href"))
+                if not href or not href.startswith("http") or href.startswith(ROOT + "/"):
+                    continue
+                anchor_text = clean(a.get_text(" ", strip=True)).lower()
+                score = 0
+                for term, weight in terms:
+                    if term in row_text:
+                        score = max(score, weight)
+                    if term in anchor_text:
+                        score = max(score, weight + 20)
+                if score:
+                    candidates.append((score, href))
+
+        # Then inspect all external anchors and their nearby text.
+        for a in soup.find_all("a", href=True):
+            href = normalize_url(a.get("href"))
+            if not href or not href.startswith("http") or href.startswith(ROOT + "/"):
+                continue
+            text = clean(a.get_text(" ", strip=True)).lower()
+            parent_text = clean(a.parent.get_text(" ", strip=True)).lower() if a.parent else ""
+            score = 0
+            for term, weight in terms:
+                if term in text:
+                    score = max(score, weight + 25)
+                elif term in parent_text:
+                    score = max(score, weight)
+            if score:
+                candidates.append((score, href))
+
+        if candidates:
+            candidates.sort(key=lambda x: (-x[0], x[1]))
+            return candidates[0][1]
+        return ""
+    except Exception:
+        return ""
+
+def enrich_official_links(items, heading_hint):
+    """Attach direct official action links used by the Computer Prachi buttons."""
+    for item in items:
+        direct = extract_official_link(item.get("url", ""), heading_hint)
+        if direct:
+            item["official"] = direct
+    return items
+
 def extract_category(url, heading_hint):
     """Extract links belonging to the requested category page.
 
@@ -179,7 +251,7 @@ def extract_category(url, heading_hint):
         "Results": ("all latest examination result", "all latest result", "latest result", "result"),
         "Admit Cards": ("all latest admit card", "admit card"),
         "Answer Key": ("all latest answer key", "answer key"),
-        "Admission": ("all latest admission", "admission"),
+        "Admission": ("all latest admission",),
         "10th/ITI Jobs": ("all latest 10th", "10th/iti"),
         "Outsourcing Jobs": ("all latest outsourcing", "outsourcing"),
         "Syllabus": ("all latest syllabus",),
@@ -192,12 +264,7 @@ def extract_category(url, heading_hint):
         if any(h in txt for h in wanted):
             matched = heading
             break
-if heading_hint == "Admission":
-    for heading in soup.find_all("h2"):
-        txt = clean(heading.get_text(" ", strip=True)).lower()
-        if txt == "admission":
-            matched = heading
-            break
+
     if matched is None:
         raise RuntimeError(f"Source parsing failed for {heading_hint}: heading not found at {url}")
 
@@ -254,14 +321,7 @@ if heading_hint == "Admission":
                 break
 
     if len(out) < 3:
-
-
-
-        
-
-
-        
-         raise RuntimeError(
+        raise RuntimeError(
             f"Source parsing failed for {heading_hint}: only {len(out)} items found at {url}"
         )
 
@@ -270,7 +330,7 @@ if heading_hint == "Admission":
 def li(item, kind):
     page = PAGE_MAP[kind]
     title, url = item["title"], item["url"]
-    extra = f"&official={quote(item['official'], safe='')}" if kind == "admit" and item.get("official") else ""
+    extra = f"&official={quote(item['official'], safe='')}" if item.get("official") else ""
     return (
         '<li><span class="new">NEW</span>'
         f'<a href="{page}?title={quote(title)}&url={quote(url, safe="")}{extra}" '
@@ -404,7 +464,13 @@ def main():
     items = {}
     for heading, (_, url) in CATEGORIES.items():
         items[heading] = extract_category(ROOT + url, heading)
+        # Keep the source detail page as the Computer Prachi detail view,
+        # while passing the direct external action URL to its buttons.
+        # This makes Apply / Result PDF / Admit Card / Answer Key buttons
+        # open the official destination instead of the source site.
+        items[heading] = enrich_official_links(items[heading], heading)
         if heading == "Admit Cards":
+            # Preserve the older admit-card-specific extractor as a fallback.
             items[heading] = enrich_admit_cards(items[heading])
         print(f"{heading}: {len(items[heading])}")
 
