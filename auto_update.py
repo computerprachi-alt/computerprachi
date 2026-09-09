@@ -131,6 +131,39 @@ def fetch(url):
 
     raise RuntimeError(f"Source fetch failed: {url} :: {last}")
 
+def extract_admit_link(source_url):
+    """Find the direct external Download Admit Card link on a source detail page."""
+    try:
+        soup = fetch(source_url)
+        for text_node in soup.find_all(string=re.compile(r"download\s+admit\s+card", re.I)):
+            parent = text_node.parent
+            # Prefer a nearby link in the same small section.
+            candidates = []
+            if parent is not None:
+                candidates.extend(parent.find_all("a", href=True))
+                container = parent.parent
+                if container is not None:
+                    candidates.extend(container.find_all("a", href=True))
+            # Then look forward a few links; source pages usually put
+            # "Click Here" immediately after the "Download Admit Card" label.
+            if parent is not None:
+                candidates.extend(parent.find_all_next("a", href=True, limit=4))
+            for a in candidates:
+                href = normalize_url(a.get("href"))
+                if href and not href.startswith(ROOT + "/"):
+                    return href
+        return ""
+    except Exception:
+        return ""
+
+def enrich_admit_cards(items):
+    """Attach the real external admit-card URL to each admit-card item."""
+    for item in items:
+        direct = extract_admit_link(item.get("url", ""))
+        if direct:
+            item["official"] = direct
+    return items
+
 def extract_category(url, heading_hint):
     """Extract links belonging to the requested category page.
 
@@ -225,9 +258,10 @@ def extract_category(url, heading_hint):
 def li(item, kind):
     page = PAGE_MAP[kind]
     title, url = item["title"], item["url"]
+    extra = f"&official={quote(item['official'], safe='')}" if kind == "admit" and item.get("official") else ""
     return (
         '<li><span class="new">NEW</span>'
-        f'<a href="{page}?title={quote(title)}&url={quote(url, safe="")}" '
+        f'<a href="{page}?title={quote(title)}&url={quote(url, safe="")}{extra}" '
         f'target="_self" rel="noopener">{title}</a></li>'
     )
 
@@ -358,6 +392,8 @@ def main():
     items = {}
     for heading, (_, url) in CATEGORIES.items():
         items[heading] = extract_category(ROOT + url, heading)
+        if heading == "Admit Cards":
+            items[heading] = enrich_admit_cards(items[heading])
         print(f"{heading}: {len(items[heading])}")
 
     primary = sum(
