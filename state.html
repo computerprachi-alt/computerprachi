@@ -54,20 +54,4 @@ function updateClock() {
  document.querySelector('.cp-date').textContent=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 }
 updateClock(); setInterval(updateClock,1000);
-</script><script id="cp-live-clock-script">
-(function(){
-  function tick(){
-    var now=new Date();
-    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-    var el=document.getElementById('cp-live-clock');
-    if(!el) return;
-    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
-    if(te) te.textContent='🕐 '+time;
-    if(de) de.textContent=date;
-  }
-  tick();
-  setInterval(tick,1000);
-})();
-</script>
-</body></html>
+</script></body></html>

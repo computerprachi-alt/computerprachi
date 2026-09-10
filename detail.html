@@ -143,21 +143,20 @@ backLinks.forEach((e)=>{ if(e.textContent.includes('Back to Category')) e.href=b
 document.getElementById('apply').textContent=official?'Open Official Website':'Official Website Not Found'; document.getElementById('apply2').textContent=official?'Open Official Website':'Official Website Not Found'; ['apply','apply2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official)e.href=official; else e.style.display='none'; }}); ['source','source2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official)e.href=official; else e.style.display='none'; }});
 function goSearch(){const q=(document.getElementById('q')?.value||'').trim(); if(q) location.href='index.html?search='+encodeURIComponent(q);}
 </script>
-
 <script id="cp-live-clock-script">
 (function(){
   function tick(){
     var now=new Date();
-    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var d=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var el=document.getElementById('cp-live-clock');
-    if(!el) return;
-    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
-    if(te) te.textContent='🕐 '+time;
-    if(de) de.textContent=date;
+    if(el){
+      var time=el.querySelector('.cp-time'), date=el.querySelector('.cp-date');
+      if(time) time.textContent='🕐 '+t;
+      if(date) date.textContent=d;
+    }
   }
-  tick();
-  setInterval(tick,1000);
+  tick(); setInterval(tick,1000);
 })();
 </script>
 </body></html>

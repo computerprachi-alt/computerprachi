@@ -23,21 +23,20 @@
 }
 </style>
 </head><body><div id="cp-live-clock" class="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div><div class="wrap"><h1>💻 Computer Prachi — About Us</h1><p>Computer Prachi एक informational website है जहाँ सरकारी नौकरी, Result, Admit Card, Answer Key, Admission और Syllabus से संबंधित updates को आसान भाषा में प्रस्तुत किया जाता है। हमारी कोशिश है कि readers को official notification तक जल्दी पहुँचने में मदद मिले। यह वेबसाइट किसी सरकारी विभाग की official website नहीं है।</p><p><a href="index.html">← Back to Home</a></p></div>
-
 <script id="cp-live-clock-script">
 (function(){
   function tick(){
     var now=new Date();
-    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var d=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var el=document.getElementById('cp-live-clock');
-    if(!el) return;
-    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
-    if(te) te.textContent='🕐 '+time;
-    if(de) de.textContent=date;
+    if(el){
+      var time=el.querySelector('.cp-time'), date=el.querySelector('.cp-date');
+      if(time) time.textContent='🕐 '+t;
+      if(date) date.textContent=d;
+    }
   }
-  tick();
-  setInterval(tick,1000);
+  tick(); setInterval(tick,1000);
 })();
 </script>
 </body></html>
