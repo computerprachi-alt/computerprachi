@@ -1,3 +1,4 @@
+# Computer Prachi verified/updated: 10-09-2026 03:34
 User-agent: *
 Allow: /
 Sitemap: https://computerprachi-alt.github.io/computerprachi/sitemap.xml

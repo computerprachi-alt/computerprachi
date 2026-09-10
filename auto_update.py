@@ -1,3 +1,4 @@
+# Computer Prachi verified/updated: 10-09-2026 03:34
 #!/usr/bin/env python3
 """
 Computer Prachi automatic updater - category-isolated version.
@@ -57,6 +58,7 @@ PAGE_MAP = {
     "outsourcing": "detail.html",
     "syllabus": "detail.html",
     "documents": "detail.html",
+    "updates": "all-latest-update.html",
 }
 
 INDEX_ID_MAP = {
@@ -359,7 +361,10 @@ def extract_category(url, heading_hint):
     return out[:50]
 
 def li(item, kind):
-    page = PAGE_MAP[kind]
+    # Mixed Latest Update entries carry their real category so links still
+    # open the correct category-specific detail page.
+    actual_kind = item.get("_kind", kind) if kind == "updates" else kind
+    page = PAGE_MAP[actual_kind]
     title, url = item["title"], item["url"]
     extra = f"&official={quote(item['official'], safe='')}" if item.get("official") else ""
     return (
@@ -450,28 +455,29 @@ def update_page(filename, kind, items):
     marker = f"<!-- AUTO:{kind}:START -->"
 
     if marker not in text:
-        # Find the first substantial list after the first section heading.
+        # Add markers around the first substantial <ul> belonging to the
+        # first content section. Accept <ul>, <ul id="...">, classes, etc.
         m = re.search(
-            r"(<section[^>]*>.*?<h2>.*?</h2>)\s*<ul>(.*?)</ul>",
+            r"(<section\b[^>]*>.*?<h2\b[^>]*>.*?</h2>\s*<ul\b[^>]*>)(.*?)(</ul>)",
             text, re.S | re.I
         )
         if not m:
-            # Try generic main-content list.
             m = re.search(
-                r"(<main\b.*?>.*?<h2>.*?</h2>)\s*<ul>(.*?)</ul>",
+                r"(<main\b[^>]*>.*?<h2\b[^>]*>.*?</h2>\s*<ul\b[^>]*>)(.*?)(</ul>)",
                 text, re.S | re.I
             )
         if not m:
             raise RuntimeError(f"Cannot add marker to {filename}")
         wrapped = (
-            m.group(1) + f"<ul>{marker}" + m.group(2)
-            + f"<!-- AUTO:{kind}:END --></ul>"
+            m.group(1) + f"<!-- AUTO:{kind}:START -->"
+            + m.group(2)
+            + f"<!-- AUTO:{kind}:END -->" + m.group(3)
         )
         text = text[:m.start()] + wrapped + text[m.end():]
 
     updated = replace_marker(text, kind, list_html(items, kind))
     if updated is None:
-        raise RuntimeError(f"Cannot replace marker in {filename}")
+        raise RuntimeError(f"Cannot update marker in {filename}")
     path.write_text(updated, encoding="utf-8")
 
 def stamp_update_date():
@@ -538,7 +544,10 @@ def main():
     mixed_all = []
     for heading in ("Results", "Admit Cards", "Latest Jobs", "Answer Key", "Documents", "Admission", "10th/ITI Jobs", "Outsourcing Jobs", "Syllabus"):
         kind = CATEGORIES[heading][0]
-        mixed_all.extend(items[heading][:3])
+        for item in items[heading][:3]:
+            copy_item = dict(item)
+            copy_item["_kind"] = kind
+            mixed_all.append(copy_item)
     update_page("all-latest-update.html", "updates", mixed_all[:18])
     stamp_update_date()
     print("Computer Prachi category update completed successfully.")
