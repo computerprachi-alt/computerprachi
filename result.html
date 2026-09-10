@@ -120,20 +120,21 @@ const p=new URLSearchParams(location.search),title=p.get('title')||'Latest Resul
 function officialFromTitle(title){const t=title.toLowerCase();const m=[['upsssc','https://upsssc.gov.in/'],['upsc','https://www.upsc.gov.in/'],['ssc','https://ssc.gov.in/'],['bpsc','https://www.bpsc.bih.nic.in/'],['jssc','https://jssc.jharkhand.gov.in/'],['rpsc','https://rpsc.rajasthan.gov.in/'],['rssb','https://rssb.rajasthan.gov.in/'],['mpesb','https://esb.mp.gov.in/'],['mppsc','https://mppsc.mp.gov.in/'],['uppsc','https://uppsc.up.nic.in/'],['uksssc','https://sssc.uk.gov.in/'],['nta','https://www.nta.ac.in/'],['neet','https://exams.nta.ac.in/'],['cuet','https://exams.nta.ac.in/'],['ugc net','https://ugcnet.nta.ac.in/'],['ctet','https://ctet.nic.in/'],['nielit','https://www.nielit.gov.in/'],['ibps','https://www.ibps.in/'],['sbi','https://sbi.co.in/'],['bank of baroda','https://www.bankofbaroda.in/'],['pnb','https://www.pnbindia.in/'],['union bank','https://www.unionbankofindia.co.in/'],['rrb','https://www.rrbcdg.gov.in/'],['railway','https://indianrailways.gov.in/'],['navy','https://www.joinindiannavy.gov.in/'],['afcat','https://afcat.cdac.in/'],['air force','https://careerindianairforce.cdac.in/'],['police','https://uppbpb.gov.in/'],['cpcb','https://cpcb.nic.in/'],['drdo','https://www.drdo.gov.in/'],['isro','https://www.isro.gov.in/'],['aiims','https://www.aiimsexams.ac.in/'],['nbems','https://natboard.edu.in/'],['kvs','https://kvsangathan.nic.in/'],['nvs','https://navodaya.gov.in/'],['emrs','https://emrs.tribal.gov.in/'],['dsssb','https://dsssb.delhi.gov.in/'],['high court','https://www.sci.gov.in/'],['pfrda','https://www.pfrda.org.in/'],['cci','https://www.cci.gov.in/'],['ncl','https://www.nclcil.in/'],['bsnl','https://www.bsnl.co.in/'],['epfo','https://www.epfindia.gov.in/'],['ignou','https://ignou.ac.in/']];for(const [k,u] of m)if(t.includes(k))return u;return '';}
 const official=p.get('official')||officialFromTitle(title);document.title='Computer Prachi | '+title;document.getElementById('title').textContent=title;document.getElementById('crumb').textContent=title;document.getElementById('post').textContent=title;document.getElementById('last').textContent='Official result page पर देखें';['apply','apply2'].forEach(id=>{const e=document.getElementById(id);if(e){if(official)e.href=official;else e.style.display='none';}});['source','source2'].forEach(id=>{const e=document.getElementById(id);if(e){if(official)e.href=official;else e.style.display='none';}});function goSearch(){const q=document.getElementById('q').value.trim();if(q)location.href='all-jobs.html#'+encodeURIComponent(q)}
 </script>
+
 <script id="cp-live-clock-script">
 (function(){
   function tick(){
     var now=new Date();
-    var t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var d=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var el=document.getElementById('cp-live-clock');
-    if(el){
-      var time=el.querySelector('.cp-time'), date=el.querySelector('.cp-date');
-      if(time) time.textContent='🕐 '+t;
-      if(date) date.textContent=d;
-    }
+    if(!el) return;
+    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
+    if(te) te.textContent='🕐 '+time;
+    if(de) de.textContent=date;
   }
-  tick(); setInterval(tick,1000);
+  tick();
+  setInterval(tick,1000);
 })();
 </script>
 </body></html>

@@ -267,12 +267,38 @@ def enrich_official_links(items, heading_hint):
             item["official"] = direct
     return items
 
-def extract_category(url, heading_hint):
-    """Extract up to 70 article links from the source category and its pages.
 
-    We use the dedicated category page plus pagination so Computer Prachi can
-    show substantially more useful entries while keeping each category isolated.
+def title_matches_category(title, heading):
+    """Reject obvious cross-category contamination from source pages."""
+    t = re.sub(r"\s+", " ", title.lower()).strip()
+    if heading == "Results":
+        if any(k in t for k in ("answer key", "admit card", "exam city", "online form", "application form")):
+            return False
+        return any(k in t for k in ("result", "score card", "scorecard", "cutoff", "cut off", "merit list", "certificate", "omr answer sheet", "marks"))
+    if heading == "Admit Cards":
+        return any(k in t for k in ("admit card", "hall ticket", "exam city", "call letter")) and not any(k in t for k in ("answer key",))
+    if heading == "Answer Key":
+        return any(k in t for k in ("answer key", "response sheet", "response key", "objection"))
+    if heading == "Admission":
+        if any(k in t for k in ("admit card", "answer key", "result", "syllabus")):
+            return False
+        return any(k in t for k in ("admission", "counselling", "counseling", "entrance", "gate 2027", "jam 2027", "clat", "cat 2026", "deled", "bcece", "jeecup", "phd"))
+    if heading == "Syllabus":
+        return any(k in t for k in ("syllabus", "exam pattern", "paper pattern", "subject wise", "exam scheme"))
+    if heading == "10th/ITI Jobs":
+        return any(k in t for k in ("apprentice", "iti", "10th", "matric", "fitter", "electrician", "welder", "technician")) 
+    return True
+
+def extract_category(url, heading_hint):
+    """Extract only article links from the requested source category page.
+
+    The source category pages contain both article cards and a footer-style
+    category list. We first collect article-title headings (h2/h3) with an
+    internal article link, then fall back to the category list. This prevents
+    navigation items such as "Read more" from becoming updates and keeps
+    categories isolated.
     """
+    soup = fetch(url)
     out, seen = [], set()
     bad_titles = {
         "home", "latest job", "latest jobs", "admit card", "admit cards",
@@ -281,17 +307,17 @@ def extract_category(url, heading_hint):
         "sarkari result", "connect with us", "contact us", "privacy policy",
         "disclaimer", "more", "next", "previous"
     }
-
     def add(a):
         title = clean(a.get_text(" ", strip=True))
         href = normalize_url(a.get("href"))
         if not title or not href or not href.startswith(ROOT + "/"):
             return
         low = href.lower()
-        if any(x in low for x in ("/category/", "/tag/", "/author/", "/page/", "/feed", "/wp-")):
+        if any(x in low for x in ("/category/", "/tag/", "/author/", "/page/", "/feed", "/wp-") ):
             return
         if title.lower() in bad_titles:
             return
+        # A real article URL is a single root-level slug, not a site utility path.
         path = urlparse(href).path.strip("/")
         if not path or "/" in path:
             return
@@ -301,59 +327,51 @@ def extract_category(url, heading_hint):
         seen.add(key)
         out.append({"title": title, "url": href})
 
-    # Read up to 7 source pages (normally enough for 70+ items).
-    base = url.rstrip("/")
-    max_pages = 7 if heading_hint in ("Latest Jobs", "Results", "Admit Cards") else 1
-    page_urls = [base] + [f"{base}/page/{n}/" for n in range(2, max_pages + 1)]
-    for page_url in page_urls:
-        try:
-            soup = fetch(page_url)
-        except Exception:
-            if page_url != base:
+    # Primary: article cards. On SarkariResult each post title is rendered as
+    # a heading containing the post's own link.
+    for h in soup.find_all(["h2", "h3"]):
+        title = clean(h.get_text(" ", strip=True))
+        low = title.lower()
+        if not title or low in bad_titles or low.startswith("#"):
+            continue
+        # Skip category/footer headings; accept only headings with a direct
+        # internal article anchor.
+        for a in h.find_all("a", href=True):
+            before = len(out)
+            add(a)
+            if len(out) > before:
                 break
-            raise
+        if len(out) >= 50:
+            break
 
-        before_page = len(out)
-        for h in soup.find_all(["h2", "h3"]):
-            title = clean(h.get_text(" ", strip=True))
-            low = title.lower()
-            if not title or low in bad_titles or low.startswith("#"):
-                continue
-            for a in h.find_all("a", href=True):
-                before = len(out)
+    # Secondary: use the category's own bottom list if the theme does not put
+    # the post link inside the heading.
+    if len(out) < 5:
+        out.clear(); seen.clear()
+        marker = None
+        wanted = {
+            "Latest Jobs": "# latest job", "Results": "# result", "Admit Cards": "# admit card",
+            "Answer Key": "# answer key", "Admission": "# admission", "10th/ITI Jobs": "# 10th",
+            "Outsourcing Jobs": "# outsourcing", "Syllabus": "# syllabus", "Documents": "# documents"
+        }.get(heading_hint, "")
+        for h in soup.find_all(["h2", "h3", "h4"]):
+            if clean(h.get_text(" ", strip=True)).lower() == wanted:
+                marker = h; break
+        if marker:
+            for a in marker.find_all_next("a", href=True):
                 add(a)
-                if len(out) > before:
-                    break
-            if len(out) >= 70:
-                break
-
-        # Theme fallback: category's own bottom list.
-        if len(out) - before_page < 5:
-            wanted = {
-                "Latest Jobs": "# latest job", "Results": "# result", "Admit Cards": "# admit card",
-                "Answer Key": "# answer key", "Admission": "# admission", "10th/ITI Jobs": "# 10th",
-                "Outsourcing Jobs": "# outsourcing", "Syllabus": "# syllabus", "Documents": "# documents"
-            }.get(heading_hint, "")
-            marker = None
-            for h in soup.find_all(["h2", "h3", "h4"]):
-                if clean(h.get_text(" ", strip=True)).lower() == wanted:
-                    marker = h
-                    break
-            if marker:
-                for a in marker.find_all_next("a", href=True):
-                    add(a)
-                    if len(out) >= 70:
-                        break
-
-        if len(out) >= 70:
-            break
-        # If a page contains no new article links, later pages are unlikely to help.
-        if len(out) == before_page and page_url != base:
-            break
+                if len(out) >= 50: break
 
     if not out:
         raise RuntimeError(f"Source parsing failed for {heading_hint}: no article items at {url}")
-    return out[:70]
+    filtered = [x for x in out if title_matches_category(x["title"], heading_hint)]
+    # Never wipe an existing category solely because the source layout changed.
+    # The caller keeps the existing page when the category source is unavailable.
+    if len(filtered) >= 5:
+        out = filtered
+    elif heading_hint in ("Results","Admit Cards","Answer Key","Admission","10th/ITI Jobs","Syllabus"):
+        out = filtered
+    return out[:50]
 
 def li(item, kind):
     # Mixed Latest Update entries carry their real category so links still
@@ -409,7 +427,7 @@ def update_index(items):
     for heading, (kind, _) in CATEGORIES.items():
         if kind in INDEX_ID_MAP and items.get(heading):
             updated = replace_marker(
-                text, kind, list_html(items[heading][:30], kind)
+                text, kind, list_html(items[heading][:12], kind)
             )
             if updated is not None:
                 text = updated
@@ -432,9 +450,9 @@ def update_index(items):
         "Syllabus"
     ):
         kind = CATEGORIES[heading][0]
-        mixed.extend(li(x, kind) for x in items.get(heading, [])[:10])
+        mixed.extend(li(x, kind) for x in items.get(heading, [])[:3])
 
-    updated = replace_marker(text, "updates", "\n".join(mixed[:70]))
+    updated = replace_marker(text, "updates", "\n".join(mixed[:18]))
     if updated is not None:
         text = updated
     path.write_text(text, encoding="utf-8")
@@ -474,14 +492,6 @@ def stamp_update_date():
         )
         path.write_text(text, encoding="utf-8")
 
-PINNED_DOCUMENT_SERVICES = [
-    {"title": "Aadhaar Card Download – Official UIDAI", "url": "https://myaadhaar.uidai.gov.in/genricDownloadAadhaar/en", "official": "https://myaadhaar.uidai.gov.in/genricDownloadAadhaar/en"},
-    {"title": "Aadhaar Card Correction / Update – Official UIDAI", "url": "https://myaadhaar.uidai.gov.in/", "official": "https://myaadhaar.uidai.gov.in/"},
-    {"title": "Bihar Residence Certificate – ServicePlus", "url": "https://serviceonline.bihar.gov.in/renderApplicationForm.do?serviceId=4630012", "official": "https://serviceonline.bihar.gov.in/renderApplicationForm.do?serviceId=4630012"},
-    {"title": "Bihar Caste Certificate – ServicePlus", "url": "https://serviceonline.bihar.gov.in/renderApplicationForm.do?serviceId=4650013", "official": "https://serviceonline.bihar.gov.in/renderApplicationForm.do?serviceId=4650013"},
-    {"title": "Bihar Income Certificate – ServicePlus", "url": "https://serviceonline.bihar.gov.in/", "official": "https://serviceonline.bihar.gov.in/"},
-]
-
 def main():
     items = {}
     for heading, (_, url) in CATEGORIES.items():
@@ -496,12 +506,6 @@ def main():
         except Exception as exc:
             print(f"WARNING: {heading} source unavailable; keeping existing page data: {exc}")
             items[heading] = []
-
-    # Keep essential official document/service links available even when the
-    # source category changes. These are official portals, not source-site links.
-    existing_doc_urls = {x.get("url", "") for x in items.get("Documents", [])}
-    pinned = [dict(x) for x in PINNED_DOCUMENT_SERVICES if x.get("url") not in existing_doc_urls]
-    items["Documents"] = pinned + items.get("Documents", [])
 
     primary = sum(
         bool(items.get(k)) for k in ("Latest Jobs", "Results", "Admit Cards")
@@ -535,11 +539,11 @@ def main():
     mixed_all = []
     for heading in ("Results", "Admit Cards", "Latest Jobs", "Answer Key", "Documents", "Admission", "10th/ITI Jobs", "Outsourcing Jobs", "Syllabus"):
         kind = CATEGORIES[heading][0]
-        for item in items[heading][:10]:
+        for item in items[heading][:3]:
             copy_item = dict(item)
             copy_item["_kind"] = kind
             mixed_all.append(copy_item)
-    update_page("all-latest-update.html", "updates", mixed_all[:70])
+    update_page("all-latest-update.html", "updates", mixed_all[:18])
     stamp_update_date()
     print("Computer Prachi category update completed successfully.")
 

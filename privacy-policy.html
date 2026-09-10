@@ -23,20 +23,21 @@
 }
 </style>
 </head><body><div id="cp-live-clock" class="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div><div class="wrap"><h1>💻 Computer Prachi — Privacy Policy</h1><p>Computer Prachi visitor privacy का सम्मान करता है। वेबसाइट basic analytics, cookies या advertising services का उपयोग कर सकती है। यदि Google AdSense लगाया जाता है, तो Google और उसके partners cookies का उपयोग personalized/non-personalized advertising के लिए कर सकते हैं, लागू settings और consent requirements के अनुसार। उपयोगकर्ता browser settings से cookies नियंत्रित कर सकता है।<br><br>हम जानबूझकर passwords, payment-card details या अन्य अनावश्यक संवेदनशील जानकारी collect नहीं करते। इस policy में बदलाव होने पर page update किया जा सकता है।</p><p><a href="index.html">← Back to Home</a></p></div>
+
 <script id="cp-live-clock-script">
 (function(){
   function tick(){
     var now=new Date();
-    var t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var d=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var el=document.getElementById('cp-live-clock');
-    if(el){
-      var time=el.querySelector('.cp-time'), date=el.querySelector('.cp-date');
-      if(time) time.textContent='🕐 '+t;
-      if(date) date.textContent=d;
-    }
+    if(!el) return;
+    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
+    if(te) te.textContent='🕐 '+time;
+    if(de) de.textContent=date;
   }
-  tick(); setInterval(tick,1000);
+  tick();
+  setInterval(tick,1000);
 })();
 </script>
 </body></html>

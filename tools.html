@@ -87,7 +87,23 @@ function printArea(id){
   w.document.open();
   w.document.write('<!doctype html><html><head><meta charset=\"utf-8\"><title>Computer Prachi</title><style>body{font-family:Arial,sans-serif;padding:30px;line-height:1.6;color:#222}h2{color:#08256b;text-align:center}h3{border-bottom:1px solid #ccc;padding-bottom:5px}button,a{display:none!important}</style></head><body>');
   w.document.write(el.innerHTML);
-  w.document.write('</body></html>');
+  w.document.write('<script id="cp-live-clock-script">
+(function(){
+  function tick(){
+    var now=new Date();
+    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var el=document.getElementById('cp-live-clock');
+    if(!el) return;
+    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
+    if(te) te.textContent='🕐 '+time;
+    if(de) de.textContent=date;
+  }
+  tick();
+  setInterval(tick,1000);
+})();
+</script>
+</body></html>');
   w.document.close();
   w.focus();
   setTimeout(function(){w.print();},400);
@@ -101,4 +117,20 @@ function calcPercentage(){const o=+($('pctObt').value),t=+($('pctTotal').value);
 function calcCgpa(){const c=+($('cgpaValue').value);if(c<0||c>10)return $('cgpaResult').textContent='Enter CGPA between 0 and 10.';$('cgpaResult').textContent='Approx. Percentage: '+(c*9.5).toFixed(2)+'%';}
 function dateDifference(){const a=$('dateStart').value,b=$('dateEnd').value;if(!a||!b)return $('dateResult').textContent='Select both dates.';const d=Math.round((new Date(b)-new Date(a))/86400000);$('dateResult').textContent=d>=0?'Difference: '+d+' day(s)':'End date must be after start date.';}
 let countdownTimer;function startCountdown(){clearInterval(countdownTimer);const v=$('countdownDate').value;if(!v)return $('countdownResult').textContent='Select an exam date.';const target=new Date(v).getTime();function tick(){const diff=target-Date.now();if(diff<=0){$('countdownResult').textContent='🎉 Exam time has arrived!';clearInterval(countdownTimer);return}const d=Math.floor(diff/86400000),h=Math.floor(diff%86400000/3600000),m=Math.floor(diff%3600000/60000),s=Math.floor(diff%60000/1000);$('countdownResult').textContent=d+' days '+h+' hours '+m+' minutes '+s+' seconds remaining';}tick();countdownTimer=setInterval(tick,1000);}
-</script></body></html>
+</script><script id="cp-live-clock-script">
+(function(){
+  function tick(){
+    var now=new Date();
+    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var el=document.getElementById('cp-live-clock');
+    if(!el) return;
+    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
+    if(te) te.textContent='🕐 '+time;
+    if(de) de.textContent=date;
+  }
+  tick();
+  setInterval(tick,1000);
+})();
+</script>
+</body></html>

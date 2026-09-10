@@ -23,20 +23,21 @@
 }
 </style>
 </head><body><div id="cp-live-clock" class="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div><div class="wrap"><h1>💻 Computer Prachi — Contact Us</h1><p>Computer Prachi<br>Tilkamanjhi, Bhagalpur, Bihar - 812001<br><br>सुझाव, correction या website-related query के लिए कृपया अपना official contact email/WhatsApp यहाँ जोड़ें।<br><br>Note: मोबाइल: <br><br>ईमेल: info@computerprachi.com</p><p><a href="index.html">← Back to Home</a></p></div>
+
 <script id="cp-live-clock-script">
 (function(){
   function tick(){
     var now=new Date();
-    var t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-    var d=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var time=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    var date=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var el=document.getElementById('cp-live-clock');
-    if(el){
-      var time=el.querySelector('.cp-time'), date=el.querySelector('.cp-date');
-      if(time) time.textContent='🕐 '+t;
-      if(date) date.textContent=d;
-    }
+    if(!el) return;
+    var te=el.querySelector('.cp-time'), de=el.querySelector('.cp-date');
+    if(te) te.textContent='🕐 '+time;
+    if(de) de.textContent=date;
   }
-  tick(); setInterval(tick,1000);
+  tick();
+  setInterval(tick,1000);
 })();
 </script>
 </body></html>
