@@ -1,4 +1,4 @@
-# Computer Prachi verified/updated: 10-09-2026 03:34
+# Computer Prachi verified/updated: 10-09-2026 03:55
 #!/usr/bin/env python3
 """
 Computer Prachi automatic updater - category-isolated version.
@@ -37,7 +37,7 @@ SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
 CATEGORIES = {
-    "Latest Jobs": ("jobs", "/latest-jobs/"),
+    "Latest Jobs": ("jobs", "/category/latest-job/"),
     "Results": ("results", "/category/result/"),
     "Admit Cards": ("admit", "/category/admit-card/"),
     "Answer Key": ("answer", "/category/answer-key/"),
@@ -268,97 +268,162 @@ def enrich_official_links(items, heading_hint):
     return items
 
 def extract_category(url, heading_hint):
-    """Extract links belonging to the requested category page.
+    """Extract only article links from one dedicated source category page.
 
-    The source layout can put the category <ul> directly after the heading or
-    inside a wrapper <div>.  We therefore walk the DOM after the matching
-    heading and collect article links until the next major heading instead of
-    requiring a specific sibling structure.
+    The source site repeats mixed lists in navigation/sidebar/footer, so the
+    old "walk forward from a heading" parser could accidentally pick unrelated
+    items or generic links such as "Read more".  Category pages themselves are
+    the source of truth: first use their article/post cards, then fall back to
+    the category section if the theme changes.
     """
     soup = fetch(url)
-    out, seen = [], set()
-    wanted = {
-        "Latest Jobs": ("all latest jobs", "latest job"),
-        "Results": ("all latest examination result", "all latest result", "latest result", "result"),
-        "Admit Cards": ("all latest admit card", "admit card"),
-        "Answer Key": ("all latest answer key", "answer key"),
-        "Admission": ("all latest admission",),
-        "10th/ITI Jobs": ("all latest 10th", "10th/iti"),
-        "Outsourcing Jobs": ("all latest outsourcing", "outsourcing"),
-        "Syllabus": ("all latest syllabus",),
-        "Documents": ("all latest documents", "all latest document", "documents"),
-    }.get(heading_hint, (heading_hint.lower(),))
+    out, seen_urls = [], set()
 
-    matched = None
-    for heading in soup.find_all(["h1", "h2", "h3", "h4"]):
-        txt = clean(heading.get_text(" ", strip=True)).lower()
-        if any(h in txt for h in wanted):
-            matched = heading
-            break
+    exact_headings = {
+        "Latest Jobs": {"latest job", "latest jobs", "all latest jobs"},
+        "Results": {"result", "results", "all latest examination result",
+                    "all latest result", "latest result"},
+        "Admit Cards": {"admit card", "admit cards", "all latest admit card"},
+        "Answer Key": {"answer key", "all latest answer key"},
+        "Admission": {"admission", "all latest admission"},
+        "10th/ITI Jobs": {"10th/iti jobs", "10th/iti", "all latest 10th/iti jobs",
+                          "all latest 10th"},
+        "Outsourcing Jobs": {"outsourcing jobs", "outsourcing", "all latest outsourcing jobs",
+                             "all latest outsourcing"},
+        "Syllabus": {"syllabus", "all latest syllabus"},
+        "Documents": {"documents verification", "document verification",
+                      "all latest documents verification", "all latest document"},
+    }
+    wanted = {clean(x).lower() for x in exact_headings.get(heading_hint, {heading_hint})}
 
-    if matched is None:
-        raise RuntimeError(f"Source parsing failed for {heading_hint}: heading not found at {url}")
+    # Prefer the real category heading instead of a later repeated sidebar/footer
+    # heading. For each category we rank exact matches above substring matches.
+    heading_candidates = []
+    for h in soup.find_all(["h1", "h2", "h3", "h4"]):
+        htxt = clean(h.get_text(" ", strip=True)).lower()
+        if htxt in wanted:
+            heading_candidates.append((0, h))
+        elif any(x in htxt for x in wanted):
+            heading_candidates.append((1, h))
 
-    def add_anchor(a):
+    matched = heading_candidates[0][1] if heading_candidates else None
+
+    bad_titles = {
+        "home", "latest job", "latest jobs", "admit card", "admit cards",
+        "result", "results", "admission", "syllabus", "answer key",
+        "documents", "documents verification", "read more",
+        "official sarkari result", "sarkari result", "let’s update",
+        "let's update", "lets update", "view more", "view all", "next", "previous",
+    }
+
+    def add_anchor(a, score=0):
         title = clean(a.get_text(" ", strip=True))
         href = normalize_url(a.get("href"))
         if not title or not href or not href.startswith(ROOT + "/"):
             return
         low = href.lower()
-        if any(x in low for x in ("/category/", "/tag/", "/author/", "/page/", "/feed")):
+        # Only article/detail URLs are useful. Category, tag, author, pagination,
+        # feed and site-navigation URLs must never become content items.
+        if any(x in low for x in (
+            "/category/", "/tag/", "/author/", "/page/", "/feed",
+            "/wp-", "?s=", "/search/"
+        )):
             return
-        # Ignore obvious site/navigation links.
-        bad = {"home", "latest job", "admit card", "result", "admission", "syllabus", "answer key"}
-        if title.lower() in bad:
+        if low.rstrip("/") == ROOT.lower().rstrip("/"):
             return
-        key = (title.lower(), href)
-        if key not in seen:
-            seen.add(key)
-            out.append({"title": title, "url": href})
+        title_low = title.lower()
+        if title_low in bad_titles or len(title) < 5:
+            return
+        # Do not let generic sidebar/utility text enter a content list.
+        if any(x in title_low for x in (
+            "welcome to official sarkari result",
+            "stay informed about the latest",
+        )):
+            return
 
-    # Walk forward through siblings.  This handles both a direct <ul> and a
-    # wrapper <div> containing the list.  Stop before the next major heading.
-    node = matched
-    steps = 0
-    while node is not None and steps < 40:
-        node = node.find_next_sibling()
-        steps += 1
-        if node is None:
-            break
-        if getattr(node, "name", None) in {"h1", "h2", "h3", "h4"}:
-            break
-        for a in node.find_all("a", href=True):
-            add_anchor(a)
-        if len(out) >= 50:
-            break
+        # Article links on the source are the strongest evidence. If the anchor
+        # is inside an <article> or common post-card wrapper, keep its order.
+        key = href.split("#", 1)[0].rstrip("/")
+        if key not in seen_urls:
+            seen_urls.add(key)
+            out.append({"title": title, "url": href, "_score": score})
 
-    # Robust fallback: collect links in document order after the matched
-    # heading, stopping only at the next major section heading.  The source
-    # currently renders the list inside nested wrappers, so sibling traversal
-    # alone can see only a few items even though the page contains many.
-    if len(out) < 10:
-        out.clear()
-        seen.clear()
+    # 1) Best path: collect links from actual article/post cards. This avoids
+    # sidebar/footer lists which contain items from other categories.
+    article_nodes = soup.find_all("article")
+    for article in article_nodes:
+        # Prefer anchors whose visible text is a title. Image-only anchors are
+        # ignored here and can be recovered by the section fallback below.
+        for a in article.find_all("a", href=True):
+            add_anchor(a, 100)
+    if len(out) >= 5:
+        out = out[:50]
+        for item in out:
+            item.pop("_score", None)
+        return out
+
+    # 2) Theme fallback: collect from the main content area around the exact
+    # category heading. Exclude header/nav/sidebar/footer blocks.
+    out.clear()
+    seen_urls.clear()
+
+    root = soup.find("main") or soup.body or soup
+    for a in root.find_all("a", href=True):
+        # Skip anchors living in navigation/sidebar/footer regions.
+        blocked = False
+        for parent in a.parents:
+            if parent is None:
+                break
+            name = getattr(parent, "name", "")
+            classes = " ".join(parent.get("class", [])).lower() if hasattr(parent, "get") else ""
+            ident = str(parent.get("id", "")).lower() if hasattr(parent, "get") else ""
+            if name in {"nav", "header", "footer"} or any(
+                token in (classes + " " + ident)
+                for token in ("sidebar", "menu", "navigation", "breadcrumb", "footer")
+            ):
+                blocked = True
+                break
+            if matched is not None and parent is matched:
+                break
+        if blocked:
+            continue
+        add_anchor(a, 50)
+
+    if len(out) >= 5:
+        out = out[:50]
+        for item in out:
+            item.pop("_score", None)
+        return out
+
+    # 3) Last fallback: inspect links after the selected category heading until
+    # the next major heading. This is deliberately conservative and filters all
+    # generic navigation text.
+    out.clear()
+    seen_urls.clear()
+    if matched is not None:
         node = matched
-        while True:
+        steps = 0
+        while node is not None and steps < 80:
             node = node.find_next()
+            steps += 1
             if node is None:
                 break
-            if getattr(node, "name", None) in {"h1", "h2"}:
+            if getattr(node, "name", None) in {"h1", "h2"} and node is not matched:
                 break
             if getattr(node, "name", None) == "a" and node.get("href"):
-                add_anchor(node)
+                add_anchor(node, 20)
             if len(out) >= 50:
                 break
 
-    # Some source categories can legitimately contain only 1–2 entries.
-    # Do not fail the whole workflow just because a category has fewer than 3.
     if not out:
         raise RuntimeError(
-            f"Source parsing failed for {heading_hint}: no items found at {url}"
+            f"Source parsing failed for {heading_hint}: no article links found at {url}"
         )
 
-    return out[:50]
+    out = out[:50]
+    for item in out:
+        item.pop("_score", None)
+    return out
 
 def li(item, kind):
     # Mixed Latest Update entries carry their real category so links still
