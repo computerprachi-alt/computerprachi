@@ -1,4 +1,4 @@
-# Computer Prachi verified/updated: 10-09-2026 03:55
+# Computer Prachi verified/updated: 10-09-2026 03:34
 #!/usr/bin/env python3
 """
 Computer Prachi automatic updater - category-isolated version.
@@ -10,11 +10,11 @@ Admit Card, Syllabus, Admission, etc.
 import re
 import socket
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -268,162 +268,81 @@ def enrich_official_links(items, heading_hint):
     return items
 
 def extract_category(url, heading_hint):
-    """Extract only article links from one dedicated source category page.
+    """Extract only article links from the requested source category page.
 
-    The source site repeats mixed lists in navigation/sidebar/footer, so the
-    old "walk forward from a heading" parser could accidentally pick unrelated
-    items or generic links such as "Read more".  Category pages themselves are
-    the source of truth: first use their article/post cards, then fall back to
-    the category section if the theme changes.
+    The source category pages contain both article cards and a footer-style
+    category list. We first collect article-title headings (h2/h3) with an
+    internal article link, then fall back to the category list. This prevents
+    navigation items such as "Read more" from becoming updates and keeps
+    categories isolated.
     """
     soup = fetch(url)
-    out, seen_urls = [], set()
-
-    exact_headings = {
-        "Latest Jobs": {"latest job", "latest jobs", "all latest jobs"},
-        "Results": {"result", "results", "all latest examination result",
-                    "all latest result", "latest result"},
-        "Admit Cards": {"admit card", "admit cards", "all latest admit card"},
-        "Answer Key": {"answer key", "all latest answer key"},
-        "Admission": {"admission", "all latest admission"},
-        "10th/ITI Jobs": {"10th/iti jobs", "10th/iti", "all latest 10th/iti jobs",
-                          "all latest 10th"},
-        "Outsourcing Jobs": {"outsourcing jobs", "outsourcing", "all latest outsourcing jobs",
-                             "all latest outsourcing"},
-        "Syllabus": {"syllabus", "all latest syllabus"},
-        "Documents": {"documents verification", "document verification",
-                      "all latest documents verification", "all latest document"},
-    }
-    wanted = {clean(x).lower() for x in exact_headings.get(heading_hint, {heading_hint})}
-
-    # Prefer the real category heading instead of a later repeated sidebar/footer
-    # heading. For each category we rank exact matches above substring matches.
-    heading_candidates = []
-    for h in soup.find_all(["h1", "h2", "h3", "h4"]):
-        htxt = clean(h.get_text(" ", strip=True)).lower()
-        if htxt in wanted:
-            heading_candidates.append((0, h))
-        elif any(x in htxt for x in wanted):
-            heading_candidates.append((1, h))
-
-    matched = heading_candidates[0][1] if heading_candidates else None
-
+    out, seen = [], set()
     bad_titles = {
         "home", "latest job", "latest jobs", "admit card", "admit cards",
         "result", "results", "admission", "syllabus", "answer key",
-        "documents", "documents verification", "read more",
-        "official sarkari result", "sarkari result", "let’s update",
-        "let's update", "lets update", "view more", "view all", "next", "previous",
+        "read more", "official sarkari result", "let’s update", "let's update",
+        "sarkari result", "connect with us", "contact us", "privacy policy",
+        "disclaimer", "more", "next", "previous"
     }
-
-    def add_anchor(a, score=0):
+    def add(a):
         title = clean(a.get_text(" ", strip=True))
         href = normalize_url(a.get("href"))
         if not title or not href or not href.startswith(ROOT + "/"):
             return
         low = href.lower()
-        # Only article/detail URLs are useful. Category, tag, author, pagination,
-        # feed and site-navigation URLs must never become content items.
-        if any(x in low for x in (
-            "/category/", "/tag/", "/author/", "/page/", "/feed",
-            "/wp-", "?s=", "/search/"
-        )):
+        if any(x in low for x in ("/category/", "/tag/", "/author/", "/page/", "/feed", "/wp-") ):
             return
-        if low.rstrip("/") == ROOT.lower().rstrip("/"):
+        if title.lower() in bad_titles:
             return
-        title_low = title.lower()
-        if title_low in bad_titles or len(title) < 5:
+        # A real article URL is a single root-level slug, not a site utility path.
+        path = urlparse(href).path.strip("/")
+        if not path or "/" in path:
             return
-        # Do not let generic sidebar/utility text enter a content list.
-        if any(x in title_low for x in (
-            "welcome to official sarkari result",
-            "stay informed about the latest",
-        )):
+        key = href.lower()
+        if key in seen:
             return
+        seen.add(key)
+        out.append({"title": title, "url": href})
 
-        # Article links on the source are the strongest evidence. If the anchor
-        # is inside an <article> or common post-card wrapper, keep its order.
-        key = href.split("#", 1)[0].rstrip("/")
-        if key not in seen_urls:
-            seen_urls.add(key)
-            out.append({"title": title, "url": href, "_score": score})
-
-    # 1) Best path: collect links from actual article/post cards. This avoids
-    # sidebar/footer lists which contain items from other categories.
-    article_nodes = soup.find_all("article")
-    for article in article_nodes:
-        # Prefer anchors whose visible text is a title. Image-only anchors are
-        # ignored here and can be recovered by the section fallback below.
-        for a in article.find_all("a", href=True):
-            add_anchor(a, 100)
-    if len(out) >= 5:
-        out = out[:50]
-        for item in out:
-            item.pop("_score", None)
-        return out
-
-    # 2) Theme fallback: collect from the main content area around the exact
-    # category heading. Exclude header/nav/sidebar/footer blocks.
-    out.clear()
-    seen_urls.clear()
-
-    root = soup.find("main") or soup.body or soup
-    for a in root.find_all("a", href=True):
-        # Skip anchors living in navigation/sidebar/footer regions.
-        blocked = False
-        for parent in a.parents:
-            if parent is None:
-                break
-            name = getattr(parent, "name", "")
-            classes = " ".join(parent.get("class", [])).lower() if hasattr(parent, "get") else ""
-            ident = str(parent.get("id", "")).lower() if hasattr(parent, "get") else ""
-            if name in {"nav", "header", "footer"} or any(
-                token in (classes + " " + ident)
-                for token in ("sidebar", "menu", "navigation", "breadcrumb", "footer")
-            ):
-                blocked = True
-                break
-            if matched is not None and parent is matched:
-                break
-        if blocked:
+    # Primary: article cards. On SarkariResult each post title is rendered as
+    # a heading containing the post's own link.
+    for h in soup.find_all(["h2", "h3"]):
+        title = clean(h.get_text(" ", strip=True))
+        low = title.lower()
+        if not title or low in bad_titles or low.startswith("#"):
             continue
-        add_anchor(a, 50)
+        # Skip category/footer headings; accept only headings with a direct
+        # internal article anchor.
+        for a in h.find_all("a", href=True):
+            before = len(out)
+            add(a)
+            if len(out) > before:
+                break
+        if len(out) >= 50:
+            break
 
-    if len(out) >= 5:
-        out = out[:50]
-        for item in out:
-            item.pop("_score", None)
-        return out
-
-    # 3) Last fallback: inspect links after the selected category heading until
-    # the next major heading. This is deliberately conservative and filters all
-    # generic navigation text.
-    out.clear()
-    seen_urls.clear()
-    if matched is not None:
-        node = matched
-        steps = 0
-        while node is not None and steps < 80:
-            node = node.find_next()
-            steps += 1
-            if node is None:
-                break
-            if getattr(node, "name", None) in {"h1", "h2"} and node is not matched:
-                break
-            if getattr(node, "name", None) == "a" and node.get("href"):
-                add_anchor(node, 20)
-            if len(out) >= 50:
-                break
+    # Secondary: use the category's own bottom list if the theme does not put
+    # the post link inside the heading.
+    if len(out) < 5:
+        out.clear(); seen.clear()
+        marker = None
+        wanted = {
+            "Latest Jobs": "# latest job", "Results": "# result", "Admit Cards": "# admit card",
+            "Answer Key": "# answer key", "Admission": "# admission", "10th/ITI Jobs": "# 10th",
+            "Outsourcing Jobs": "# outsourcing", "Syllabus": "# syllabus", "Documents": "# documents"
+        }.get(heading_hint, "")
+        for h in soup.find_all(["h2", "h3", "h4"]):
+            if clean(h.get_text(" ", strip=True)).lower() == wanted:
+                marker = h; break
+        if marker:
+            for a in marker.find_all_next("a", href=True):
+                add(a)
+                if len(out) >= 50: break
 
     if not out:
-        raise RuntimeError(
-            f"Source parsing failed for {heading_hint}: no article links found at {url}"
-        )
-
-    out = out[:50]
-    for item in out:
-        item.pop("_score", None)
-    return out
+        raise RuntimeError(f"Source parsing failed for {heading_hint}: no article items at {url}")
+    return out[:50]
 
 def li(item, kind):
     # Mixed Latest Update entries carry their real category so links still
@@ -455,25 +374,22 @@ def replace_marker(text, marker, new):
     return pattern.sub(replacement, text, count=1)
 
 def add_index_markers(path):
-    text = path.read_text(encoding="utf-8")
-    for kind, sid in INDEX_ID_MAP.items():
-        marker = kind
-        if f"<!-- AUTO:{marker}:START -->" in text:
-            continue
-        pat = re.compile(
-            rf'(<section[^>]*id="{re.escape(sid)}"[^>]*>.*?'
-            rf'<h2>.*?</h2>)<ul>(.*?)</ul>', re.S | re.I
-        )
-        m = pat.search(text)
-        if m:
-            wrapped = (
-                m.group(1) + f'<ul><!-- AUTO:{marker}:START -->'
-                + m.group(2)
-                + f'<!-- AUTO:{marker}:END --></ul>'
-            )
-            text = text[:m.start()] + wrapped + text[m.end():]
-    path.write_text(text, encoding="utf-8")
-    return text
+    from bs4 import BeautifulSoup, Comment
+    soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    mapping = INDEX_ID_MAP
+    for kind, sid in mapping.items():
+        sec = soup.find(id=sid)
+        if not sec: continue
+        ul = sec.find("ul")
+        if not ul: continue
+        # Remove old marker comments for this kind anywhere, then put them
+        # around the actual visible list, never in a new list at EOF.
+        for node in soup.find_all(string=lambda s: s and f"AUTO:{kind}:" in s):
+            node.extract()
+        ul.insert(0, Comment(f" AUTO:{kind}:START "))
+        ul.append(Comment(f" AUTO:{kind}:END "))
+    path.write_text(str(soup), encoding="utf-8")
+    return str(soup)
 
 def update_index(items):
     path = BASE / "index.html"
@@ -513,37 +429,22 @@ def update_index(items):
     path.write_text(text, encoding="utf-8")
 
 def update_page(filename, kind, items):
+    from bs4 import BeautifulSoup, Comment
     path = BASE / filename
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    marker = f"<!-- AUTO:{kind}:START -->"
-
-    if marker not in text:
-        # Add markers around the first substantial <ul> belonging to the
-        # first content section. Accept <ul>, <ul id="...">, classes, etc.
-        m = re.search(
-            r"(<section\b[^>]*>.*?<h2\b[^>]*>.*?</h2>\s*<ul\b[^>]*>)(.*?)(</ul>)",
-            text, re.S | re.I
-        )
-        if not m:
-            m = re.search(
-                r"(<main\b[^>]*>.*?<h2\b[^>]*>.*?</h2>\s*<ul\b[^>]*>)(.*?)(</ul>)",
-                text, re.S | re.I
-            )
-        if not m:
-            raise RuntimeError(f"Cannot add marker to {filename}")
-        wrapped = (
-            m.group(1) + f"<!-- AUTO:{kind}:START -->"
-            + m.group(2)
-            + f"<!-- AUTO:{kind}:END -->" + m.group(3)
-        )
-        text = text[:m.start()] + wrapped + text[m.end():]
-
-    updated = replace_marker(text, kind, list_html(items, kind))
-    if updated is None:
-        raise RuntimeError(f"Cannot update marker in {filename}")
-    path.write_text(updated, encoding="utf-8")
+    if not path.exists(): return
+    soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    ul = soup.find("ul")
+    if not ul: raise RuntimeError(f"Cannot find visible list in {filename}")
+    # Remove any old markers anywhere and then replace the actual visible UL.
+    for node in soup.find_all(string=lambda s: s and f"AUTO:{kind}:" in s):
+        node.extract()
+    ul.clear()
+    ul.append(Comment(f" AUTO:{kind}:START "))
+    frag = BeautifulSoup(list_html(items, kind), "html.parser")
+    for li_node in frag.find_all("li", recursive=False):
+        ul.append(li_node)
+    ul.append(Comment(f" AUTO:{kind}:END "))
+    path.write_text(str(soup), encoding="utf-8")
 
 def stamp_update_date():
     stamp = datetime.now().strftime("%d %B %Y")
