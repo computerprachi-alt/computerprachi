@@ -99,6 +99,8 @@ function solvedPdfButton(course){
   return '<a href="'+uri+'" download="IGNOU-'+course.replace(/[^A-Za-z0-9-]/g,'')+'-Solved-2025-26.pdf" style="display:block;text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:8px 0">📄 Open / Download This Course Solved PDF</a>';
 }
 const assignmentPortal="https://www.ignou.ac.in/studentService/download/assignments";
+// Bachelor programme cards use the current official IGNOU portal.
+const featured={};
 const bcaSemesters={
   1:{url:assignmentPortal,courses:[["FEG-02","Foundation English-2"],["ECO-01","Business Organisation"],["BCS-011","Computer Basics and PC Software"],["BCS-012","Basic Mathematics"],["BCSL-013","Computer Basics and PC Software Lab"]]},
   2:{url:assignmentPortal,courses:[["ECO-02","Accountancy-1"],["MCS-011","Problem Solving and Programming"],["MCS-012","Computer Organisation and Assembly Language Programming"],["MCS-015","Communication Skills"],["MCS-013","Discrete Mathematics"],["BCSL-021","C Language Programming Lab"],["BCSL-022","Assembly Language Programming Lab"]]},
