@@ -137,15 +137,17 @@ function render(){
   document.getElementById('count').textContent='Showing '+d.length+' programme(s)';
   document.getElementById('cards').innerHTML=d.map((x,i)=>{
     const isBachelor=x.cat==='Bachelor';
+    const isMaster=x.cat==='Master';
+    const showOfficial=isBachelor || isMaster;
     const base=featured[x.code] || {session:'2025-26',course:'—',courseName:'',official:assignmentPortal,note:'Official IGNOU assignment portal'};
-    const f={...base,official:isBachelor ? assignmentPortal : base.official};
+    const f={...base,official:showOfficial ? assignmentPortal : base.official};
     return `<div class="card">
       <span class="tag">${esc(x.cat)} • ${esc(x.duration)}</span>
       <h2>${esc(x.code)}</h2>
       <div>${esc(x.name)}</div>
       <p><b>Programme Category:</b> ${esc(x.cat)}</p>
       <p><b>Duration:</b> ${esc(x.duration)}</p>
-      ${isBachelor ? `<p><b>Session:</b> ${esc(f.session)}</p><p><b>Official Assignment:</b> IGNOU</p><a href="${f.official}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#0b1c70;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:8px 0">📄 Official Assignment Question</a>${f.courses ? f.courses.map(c=>`<div style="border:1px solid #dbe3f0;border-radius:8px;padding:9px;margin:8px 0;background:#f8fbff"><b>${esc(c.code)}</b> — ${esc(c.name)}${solvedPdfButton(c.code)}</div>`).join('') : (f.course && f.course!=='—' ? solvedPdfButton(f.course) : '')}` : ''}
+      ${showOfficial ? `<p><b>Session:</b> ${esc(f.session)}</p><p><b>Official Assignment:</b> IGNOU</p><a href="${f.official}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#0b1c70;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:8px 0">📄 Official Assignment Question</a>${f.courses ? f.courses.map(c=>`<div style="border:1px solid #dbe3f0;border-radius:8px;padding:9px;margin:8px 0;background:#f8fbff"><b>${esc(c.code)}</b> — ${esc(c.name)}${solvedPdfButton(c.code)}</div>`).join('') : (f.course && f.course!=='—' ? solvedPdfButton(f.course) : '')}` : ''}
       <div class="price">₹25 / Assignment</div>
       <button class="buy" onclick="document.getElementById('pay${i}').style.display='block'">₹25 Unlock Solved PDF</button>
       <div class="pay" id="pay${i}">
@@ -153,7 +155,7 @@ function render(){
         <button onclick="demo()">UPI</button>
         <button onclick="demo()">Debit/Credit Card</button>
         <button onclick="demo()">Net Banking</button>
-        <p><b>Flow:</b> Bachelor → Programme → Course → 2025-26 → ₹25 Unlock → Solved PDF</p>
+        <p><b>Flow:</b> ${esc(x.cat)} → Programme → Course → 2025-26 → ₹25 Unlock → Solved PDF</p>
         <p>Payment gateway connect होने के बाद successful payment पर इसी course का Solved PDF unlock होगा.</p>
       </div>
     </div>`;
