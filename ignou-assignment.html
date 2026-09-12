@@ -106,10 +106,51 @@ const bcaSemesters={
   5:{url:"https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf",courses:[["BCS-051","Software Engineering"],["BCS-052","Web Programming"],["BCS-053","Computer Graphics / related course"],["BCS-054","Numerical Methods"],["BCS-055","Business Communication"],["BCSL-056","Lab"],["BCSL-057","Lab"],["BCSL-058","Lab"]]},
   6:{url:"https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-6_assignments_july2025_jan2026sessions.pdf",courses:[["BCS-062","E-Commerce"],["MCS-022","Operating Systems and Networking"],["BCSL-063","Linux / Networking Lab"]]}
 };
+const bcaOfficialByCourse = {
+  "FEG-02": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-1_assignments_july2025_jan2026sessions.pdf#page=3",
+  "ECO-01": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-1_assignments_july2025_jan2026sessions.pdf#page=5",
+  "BCS-011": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-1_assignments_july2025_jan2026sessions.pdf#page=6",
+  "BCS-012": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-1_assignments_july2025_jan2026sessions.pdf#page=8",
+  "BCSL-013": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-1_assignments_july2025_jan2026sessions.pdf#page=10",
+  "ECO-02": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=3",
+  "MCS-011": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=4",
+  "MCS-012": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=6",
+  "MCS-015": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=10",
+  "MCS-013": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=13",
+  "BCSL-021": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=16",
+  "BCSL-022": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-2_assignments_july2025_jan2026sessions.pdf#page=17",
+  "MCS-021": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=3",
+  "MCS-023": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=5",
+  "MCS-014": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=7",
+  "BCS-031": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=8",
+  "BCSL-032": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=9",
+  "BCSL-033": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=10",
+  "BCSL-034": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-3_assignments_july2025_jan2026sessions%20.pdf#page=11",
+  "BCS-040": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=3",
+  "MCS-024": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=6",
+  "BCS-041": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=7",
+  "BCS-042": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=9",
+  "MCSL-016": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=11",
+  "BCSL-043": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=13",
+  "BCSL-044": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=14",
+  "BCSL-045": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-4_assignments_july2025_jan2026sessions.pdf#page=16",
+  "BCS-051": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=3",
+  "BCS-052": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=5",
+  "BCS-053": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=6",
+  "BCS-054": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=9",
+  "BCS-055": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=12",
+  "BCSL-056": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=15",
+  "BCSL-057": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=16",
+  "BCSL-058": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-5_assignments_july2025_jan2026sessions.pdf#page=19",
+  "BCS-062": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-6_assignments_july2025_jan2026sessions.pdf#page=3",
+  "MCS-022": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-6_assignments_july2025_jan2026sessions.pdf#page=4",
+  "BCSL-063": "https://webservices.ignou.ac.in/assignments/Bachelor-Degree/BCA/2025-26/bca_revised_sem-6_assignments_july2025_jan2026sessions.pdf#page=6"
+};
+
 function renderBCA(sem){
  const d=bcaSemesters[sem];
  document.getElementById('bcaSemBtns').innerHTML=Object.keys(bcaSemesters).map(n=>`<button onclick="renderBCA(${n})" style="padding:9px 13px;border:1px solid #0b1c70;border-radius:6px;background:${n==sem?'#0b1c70':'#fff'};color:${n==sem?'#fff':'#07145c'};font-weight:800;cursor:pointer">Semester ${n}</button>`).join('');
- document.getElementById('bcaCourses').innerHTML='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'+d.courses.map(c=>{const solved=solvedPdfByCourse[c[0]]; return `<div class="card"><span class="tag">BCA • Semester ${sem}</span><h2 style="font-size:17px">${esc(c[0])}</h2><div>${esc(c[1])}</div><div style="display:grid;gap:7px;margin-top:10px"><a href="${d.url}" target="_blank" rel="noopener" style="text-align:center;background:#0b1c70;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800">📄 Assignment Question</a>${solved?`<a href="${solved}" target="_blank" rel="noopener" style="text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800">✅ Assignment Solved Paper</a>`:`<div style="text-align:center;background:#fff8df;border:1px solid #ead58a;padding:10px;border-radius:5px;font-weight:700">Solved Paper — तैयारी जारी है</div>`}</div></div>`}).join('')+'</div>';
+ document.getElementById('bcaCourses').innerHTML='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'+d.courses.map(c=>{const solved=solvedPdfByCourse[c[0]]; return `<div class="card"><span class="tag">BCA • Semester ${sem}</span><h2 style="font-size:17px">${esc(c[0])}</h2><div>${esc(c[1])}</div><div style="display:grid;gap:7px;margin-top:10px"><a href="${bcaOfficialByCourse[c[0]] || d.url}" target="_blank" rel="noopener" style="text-align:center;background:#0b1c70;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800">📄 Assignment Question</a>${solved?`<a href="${solved}" target="_blank" rel="noopener" style="text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800">✅ Assignment Solved Paper</a>`:`<div style="text-align:center;background:#fff8df;border:1px solid #ead58a;padding:10px;border-radius:5px;font-weight:700">Solved Paper — तैयारी जारी है</div>`}</div></div>`}).join('')+'</div>';
 }
 
 const featured={
