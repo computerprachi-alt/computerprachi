@@ -154,9 +154,10 @@ function render(){
       <div class="price">₹25 / Assignment</div>
       ${x.code==='BAAHD' ? `<button class="buy" onclick="openBAAHDPayment()">₹25 Unlock Solved PDF</button>
       <div class="pay" id="baahdPay" style="display:none">
-        <b>BAAHD Payment</b><br>
-        ${paymentLinks.BAAHD ? `<a href="${paymentLinks.BAAHD}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:10px 0">💳 Pay ₹25 Securely</a>` : `<p style="margin:8px 0">Payment link अभी add नहीं किया गया है.</p><p style="font-size:13px;color:#555">Razorpay Payment Link बनने के बाद उसे <b>paymentLinks.BAAHD</b> में डालकर यह button active हो जाएगा.</p>`}
-        <p><b>Flow:</b> BAAHD → 2025-26 → ₹25 Payment → Solved PDF</p>
+        <b>BAAHD Secure Payment</b><br>
+        ${paymentLinks.BAAHD ? `<a href="${paymentLinks.BAAHD}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:10px 0">💳 Pay ₹25 Securely</a>` : `<p>Payment link अभी add नहीं किया गया है.</p>`}
+        <p><b>Payment के बाद:</b> Razorpay payment verify होने पर Secure PDF Download page खुलेगा.</p>
+        <p style="font-size:13px;color:#555">PDF public website पर direct link के रूप में नहीं रखा गया है.</p>
       </div>` : `<button class="buy" onclick="document.getElementById('pay${i}').style.display='block'">₹25 Unlock Solved PDF</button>
       <div class="pay" id="pay${i}">
         <b>Unlock flow</b><br>
