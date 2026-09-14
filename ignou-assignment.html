@@ -157,7 +157,7 @@ function render(){
         <b>BAAHD Payment</b><br>
         ${paymentLinks.BAAHD ? `<a href="${paymentLinks.BAAHD}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#087f23;color:#fff;text-decoration:none;padding:10px;border-radius:5px;font-weight:800;margin:10px 0">💳 Pay ₹25 Securely</a>` : `<p style="margin:8px 0">Payment link अभी add नहीं किया गया है.</p><p style="font-size:13px;color:#555">Razorpay Payment Link बनने के बाद उसे <b>paymentLinks.BAAHD</b> में डालकर यह button active हो जाएगा.</p>`}
         <p><b>Flow:</b> BAAHD → 2025-26 → ₹25 Payment → Solved PDF</p>
-      </div><div style="text-align:center;margin:14px 0"><p><b>UPI से QR Scan करके ₹25 भुगतान करें</b></p><img src="baahd-payment-qr.png" alt="BAAHD ₹25 Payment QR Code" style="width:220px;max-width:80%;border:8px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.15)"><p style="font-size:13px">QR scan करने के बाद payment पूरा करें.</p></div>` : `<button class="buy" onclick="document.getElementById('pay${i}').style.display='block'">₹25 Unlock Solved PDF</button>
+      </div>` : `<button class="buy" onclick="document.getElementById('pay${i}').style.display='block'">₹25 Unlock Solved PDF</button>
       <div class="pay" id="pay${i}">
         <b>Unlock flow</b><br>
         <button onclick="demo()">UPI</button>
