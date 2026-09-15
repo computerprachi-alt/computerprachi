@@ -360,11 +360,15 @@ def li(item, kind):
     # open the correct category-specific detail page.
     actual_kind = item.get("_kind", kind) if kind == "updates" else kind
     page = PAGE_MAP[actual_kind]
-    title, url = item["title"], item["url"]
+    title, source_url = item["title"], item["url"]
+    # Keep only a harmless article key from the source URL for local date
+    # lookup. The source domain itself is never published on Computer Prachi.
+    source_key = urlparse(source_url).path.strip("/") + "/"
     extra = f"&official={quote(item['official'], safe='')}" if item.get("official") else ""
+    key_extra = f"&key={quote(source_key, safe='')}" if source_key.strip("/") else ""
     return (
         '<li><span class="new">NEW</span>'
-        f'<a href="{page}?title={quote(title)}&url={quote(url, safe="")}{extra}" '
+        f'<a href="{page}?title={quote(title)}{key_extra}{extra}" '
         f'target="_self" rel="noopener">{title}</a></li>'
     )
 
