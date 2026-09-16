@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Find Teacher / Tutor | Computer Prachi</title>
+<meta name="description" content="Computer Prachi पर approved teachers और tutors खोजें। पूरा teacher profile देखने के लिए ₹10 profile unlock payment करें।">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#222;font-family:Arial,Helvetica,sans-serif}
+.wrap{max-width:1050px;margin:auto;background:#fff;min-height:100vh}.head{background:linear-gradient(135deg,#071a55,#123c91);color:#fff;padding:20px;text-align:center}
+.head h1{margin:0;font-size:28px}.head p{margin:7px 0 0;font-size:14px}.nav{background:#102d69;text-align:center;padding:9px}.nav a{color:#fff;text-decoration:none;font-weight:700;margin:0 9px;font-size:13px}
+.main{padding:16px}.intro{border:1px solid #cbd9ec;border-left:6px solid #c40000;background:#f8fbff;padding:15px;border-radius:9px;margin-bottom:14px}.intro h2{margin:0 0 6px;color:#102d69}
+.search{width:100%;padding:11px;border:1px solid #bcc8d8;border-radius:6px;margin:10px 0 14px;font-size:14px}
+.status{text-align:center;padding:12px;background:#f7f7f7;border-radius:7px;margin-bottom:12px}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{border:1px solid #d9e0e9;border-radius:9px;padding:14px;background:#fff}.card h3{margin:0 0 7px;color:#102d69}.line{padding:4px 0;line-height:1.45}.unlock{display:block;width:100%;margin-top:11px;padding:11px;border:0;border-radius:6px;background:#087c18;color:#fff;font-size:15px;font-weight:800;cursor:pointer}.unlock:disabled{background:#777}.empty{text-align:center;padding:25px;border:1px dashed #bbb}.note{font-size:12px;line-height:1.5;background:#fff8e5;border:1px solid #efd58c;padding:10px;border-radius:6px;margin-top:14px}
+@media(max-width:650px){.cards{grid-template-columns:1fr}.head h1{font-size:23px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="head"><h1>🎓 Find Teacher / Tutor</h1><p>Computer Prachi पर approved tutors खोजें</p></div>
+<div class="nav"><a href="index.html">⌂ Home</a><a href="tutor-registration.html">👨‍🏫 Register as Teacher</a><a href="contact-us.html">Contact Us</a></div>
+<main class="main">
+<section class="intro">
+<h2>🔎 Teacher Search</h2>
+<p>यहाँ केवल approved और paid teacher profiles की basic जानकारी दिखाई जाती है। <b>पूरा teacher profile देखने के लिए ₹10 profile unlock payment जरूरी है।</b></p>
+</section>
+<input id="search" class="search" placeholder="Teacher, subject, class, city या area खोजें...">
+<div id="status" class="status">⏳ Approved teachers load हो रहे हैं...</div>
+<div id="cards" class="cards"></div>
+<div class="note"><b>₹10 Profile Unlock:</b> Payment के बाद verified Razorpay payment callback पर पूरा teacher profile और payment receipt खुलेगा।</div>
+</main>
+</div>
+<script>
+const CP_TUTOR_API='https://script.google.com/macros/s/AKfycbyMyzWHtyHedM6uLdVPmsGDcm_AjlebLYd_QP24HOtbLfV-8MVgpRg1P-VPjUr9YDgFyg/exec';
+let tutors=[];
+function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]})}
+function render(){
+ const q=document.getElementById('search').value.trim().toLowerCase();
+ const list=tutors.filter(t=>[
+   t.name,t.qualification,t.subjects,t.classes,t.board,t.experience,t.mode,t.city,t.area
+ ].join(' ').toLowerCase().includes(q));
+ const cards=document.getElementById('cards');
+ if(!list.length){cards.innerHTML='<div class="empty">कोई approved tutor नहीं मिला।</div>';return}
+ cards.innerHTML=list.map(t=>`<div class="card">
+ <h3>👨‍🏫 ${esc(t.name)}</h3>
+ <div class="line"><b>Qualification:</b> ${esc(t.qualification||'-')}</div>
+ <div class="line"><b>Subjects:</b> ${esc(t.subjects||'-')}</div>
+ <div class="line"><b>Classes:</b> ${esc(t.classes||'-')}</div>
+ <div class="line"><b>Location:</b> ${esc((t.area?t.area+', ':'')+t.city)}</div>
+ <button class="unlock" onclick="unlock('${encodeURIComponent(t.registrationId)}',this)">🔓 View Full Teacher Profile – ₹10</button>
+ </div>`).join('');
+}
+function unlock(id,btn){
+ const tutorRegistrationId=decodeURIComponent(id);
+ const studentName=prompt('Student Name (optional):')||'';
+ const mobile=prompt('Student Mobile (optional):')||'';
+ if(mobile && !/^\d{10}$/.test(mobile)){alert('Mobile number 10 digit होना चाहिए।');return}
+ btn.disabled=true;btn.textContent='⏳ Payment link बन रही है...';
+ fetch(CP_TUTOR_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({
+   requestType:'student_profile_unlock',tutorRegistrationId,studentName,mobile
+ })})
+ .then(r=>r.json()).then(res=>{
+   if(!res.success) throw new Error(res.error||'Payment link नहीं मिला।');
+   window.location.href=res.paymentUrl;
+ }).catch(err=>{alert(err.message);btn.disabled=false;btn.textContent='🔓 View Full Teacher Profile – ₹10';});
+}
+document.getElementById('search').addEventListener('input',render);
+fetch(CP_TUTOR_API+'?action=approved_tutors')
+ .then(r=>r.json()).then(res=>{
+   if(!res.success) throw new Error(res.error||'Tutor list नहीं मिली।');
+   tutors=res.tutors||[];
+   document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
+   render();
+ }).catch(err=>{document.getElementById('status').textContent='❌ Tutor list load नहीं हो सकी: '+err.message});
+</script>
+</body>
+</html>
