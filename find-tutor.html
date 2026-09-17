@@ -51,20 +51,51 @@ function render(){
  <button class="unlock" onclick="unlock('${encodeURIComponent(t.registrationId)}',this)">🔓 View Full Teacher Profile – ₹10</button>
  </div>`).join('');
 }
-function unlock(id,btn){
- const tutorRegistrationId=decodeURIComponent(id);
- const studentName=prompt('Student Name (optional):')||'';
- const mobile=prompt('Student Mobile (optional):')||'';
- if(mobile && !/^\d{10}$/.test(mobile)){alert('Mobile number 10 digit होना चाहिए।');return}
- btn.disabled=true;btn.textContent='⏳ Payment link बन रही है...';
- fetch(CP_TUTOR_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({
-   requestType:'student_profile_unlock',tutorRegistrationId,studentName,mobile
- })})
- .then(r=>r.json()).then(res=>{
-   if(!res.success) throw new Error(res.error||'Payment link नहीं मिला।');
-   window.location.href=res.paymentUrl;
- }).catch(err=>{alert(err.message);btn.disabled=false;btn.textContent='🔓 View Full Teacher Profile – ₹10';});
+ function unlock(id,btn){
+  const tutorRegistrationId=decodeURIComponent(id);
+
+  const studentNameInput=prompt('Student Name (optional):');
+  if(studentNameInput===null){
+    return;
+  }
+  const studentName=studentNameInput.trim();
+
+  const mobileInput=prompt('Student Mobile (optional):');
+  if(mobileInput===null){
+    return;
+  }
+  const mobile=mobileInput.trim();
+
+  if(mobile && !/^\d{10}$/.test(mobile)){
+    alert('Mobile number 10 digit होना चाहिए।');
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent='⏳ Payment link बन रही है...';
+
+  fetch(CP_TUTOR_API,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({
+      requestType:'student_profile_unlock',
+      tutorRegistrationId,
+      studentName,
+      mobile
+    })
+  })
+  .then(r=>r.json())
+  .then(res=>{
+    if(!res.success) throw new Error(res.error||'Payment link नहीं मिला।');
+    window.location.href=res.paymentUrl;
+  })
+  .catch(err=>{
+    alert(err.message);
+    btn.disabled=false;
+    btn.textContent='🔓 View Full Teacher Profile – ₹10';
+  });
 }
+
 document.getElementById('search').addEventListener('input',render);
 fetch(CP_TUTOR_API+'?action=approved_tutors')
  .then(r=>r.json()).then(res=>{
