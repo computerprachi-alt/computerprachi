@@ -48,7 +48,7 @@ function getTutorSheet() {
 
 function saveTutorRegistration(data) {
   const sheet = getTutorSheet();
-  const required = ["name","mobile","qualification","subjects","city"];
+  const required = ["name","mobile","qualification","subjects","state","city"];
   required.forEach(function(k) {
     if (!String(data[k] || "").trim()) throw new Error("Required field missing: " + k);
   });
@@ -59,14 +59,35 @@ function saveTutorRegistration(data) {
   ensureTutorHeaders(sheet);
 
   const id = createRegistrationId();
-  sheet.appendRow([
-    id, new Date(), data.name || "", data.mobile || "", data.whatsapp || "",
-    data.email || "", data.gender || "", data.qualification || "",
-    data.subjects || "", data.classes || "", data.board || "",
-    data.experience || "", data.mode || "", data.city || "", data.area || "",
-    data.tuitionFee || "", data.time || "", data.about || "",
-    "Pending", "Pending", "", ""
-  ]);
+  const registrationRow = {
+    "Registration ID": id,
+    "Date/Time": new Date(),
+    "Name": data.name || "",
+    "Mobile": data.mobile || "",
+    "WhatsApp": data.whatsapp || "",
+    "Email": data.email || "",
+    "Gender": data.gender || "",
+    "Qualification": data.qualification || "",
+    "Subjects": data.subjects || "",
+    "Classes": data.classes || "",
+    "Board": data.board || "",
+    "Teaching Experience": data.experience || "",
+    "Teaching Mode": data.mode || "",
+    "State": data.state || "",
+    "City/District": data.city || "",
+    "Area/Locality": data.area || "",
+    "Expected Tuition Fee": data.tuitionFee || "",
+    "Available Time": data.time || "",
+    "About / Teaching Profile": data.about || "",
+    "Payment Status": "Pending",
+    "Verification Status": "Pending",
+    "Razorpay Payment Link ID": "",
+    "Payment ID": ""
+  };
+  const currentHeaders = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  sheet.appendRow(currentHeaders.map(function(header) {
+    return Object.prototype.hasOwnProperty.call(registrationRow,header) ? registrationRow[header] : "";
+  }));
 
   const row = sheet.getLastRow();
   const payment = createRazorpayPaymentLink(
@@ -90,7 +111,7 @@ function ensureTutorHeaders(sheet) {
   const requiredHeaders = [
     "Registration ID","Date/Time","Name","Mobile","WhatsApp","Email",
     "Gender","Qualification","Subjects","Classes","Board",
-    "Teaching Experience","Teaching Mode","City/District","Area/Locality",
+    "Teaching Experience","Teaching Mode","State","City/District","Area/Locality",
     "Expected Tuition Fee","Available Time","About / Teaching Profile",
     "Payment Status","Verification Status","Razorpay Payment Link ID","Payment ID"
   ];
@@ -118,6 +139,8 @@ function createRegistrationId() {
 
 function getApprovedTutors() {
   const sheet = getTutorSheet();
+  ensureTutorHeaders(sheet);
+  migrateKnownTutorStates(sheet);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
 
@@ -140,11 +163,44 @@ function getApprovedTutors() {
       board:String(getByHeader(headers,row,"Board") || ""),
       experience:String(getByHeader(headers,row,"Teaching Experience") || ""),
       mode:String(getByHeader(headers,row,"Teaching Mode") || ""),
+      state:String(getByHeader(headers,row,"State") || ""),
       city:String(getByHeader(headers,row,"City/District") || ""),
+      district:String(getByHeader(headers,row,"City/District") || ""),
       area:String(getByHeader(headers,row,"Area/Locality") || "")
     });
   }
   return out;
+}
+
+function migrateKnownTutorStates(sheet) {
+  const propertyKey = "CP_TUTOR_STATE_MIGRATION_V1";
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(propertyKey) === "done") return;
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    props.setProperty(propertyKey,"done");
+    return;
+  }
+
+  const headers = values[0];
+  const knownNames = {
+    "prachi kumari":"Bihar",
+    "devit shekhar":"Bihar"
+  };
+
+  for (let i=1; i<values.length; i++) {
+    const row = values[i];
+    const name = String(getByHeader(headers,row,"Name") || "").trim().toLowerCase();
+    const state = String(getByHeader(headers,row,"State") || "").trim();
+    const status = String(getByHeader(headers,row,"Verification Status") || "").trim().toLowerCase();
+    const payment = String(getByHeader(headers,row,"Payment Status") || "").trim().toLowerCase();
+    if (knownNames[name] && !state && status === "approved" && payment === "paid") {
+      setCellByHeader(sheet,i+1,"State",knownNames[name]);
+    }
+  }
+
+  props.setProperty(propertyKey,"done");
 }
 
 function createProfileUnlock(data) {
@@ -241,6 +297,7 @@ function findTutorById(id) {
         board:String(getByHeader(headers,values[i],"Board") || ""),
         experience:String(getByHeader(headers,values[i],"Teaching Experience") || ""),
         mode:String(getByHeader(headers,values[i],"Teaching Mode") || ""),
+        state:String(getByHeader(headers,values[i],"State") || ""),
         city:String(getByHeader(headers,values[i],"City/District") || ""),
         area:String(getByHeader(headers,values[i],"Area/Locality") || ""),
         tuitionFee:String(getByHeader(headers,values[i],"Expected Tuition Fee") || ""),

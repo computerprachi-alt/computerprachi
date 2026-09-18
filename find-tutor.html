@@ -116,8 +116,16 @@ function renderDirectory(){
  const districtSelect=document.getElementById('directoryDistrict');
 
  const previousState=stateSelect.value.trim();
+ const stateCounts={};
+ tutors.forEach(t=>{
+   const state=getDirectoryLocation(t).state;
+   if(state){
+     const key=state.toLowerCase();
+     stateCounts[key]=(stateCounts[key]||0)+1;
+   }
+ });
  stateSelect.innerHTML=INDIAN_STATES_AND_UTS
-   .map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+   .map(s=>`<option value="${esc(s)}">${esc(s)} (${stateCounts[s.toLowerCase()]||0})</option>`).join('');
 
  if(directoryInitialized && INDIAN_STATES_AND_UTS.some(s=>s.toLowerCase()===previousState.toLowerCase())){
    stateSelect.value=INDIAN_STATES_AND_UTS.find(s=>s.toLowerCase()===previousState.toLowerCase());
