@@ -289,8 +289,8 @@ document.getElementById('directoryState').addEventListener('change',()=>{directo
 document.getElementById('directoryDistrict').addEventListener('change',()=>{directorySubject='';directoryArea='';renderDirectory();render();});
 fetch(CP_TUTOR_API+'?action=approved_tutors')
  .then(r=>r.json()).then(res=>{
-   if(!res.success) throw new Error(res.error||'Tutor list नहीं मिली।');
    tutors=Array.isArray(res)?res:(Array.isArray(res.tutors)?res.tutors:(Array.isArray(res.approved_tutors)?res.approved_tutors:[]));
+   if(!tutors.length) throw new Error('Tutor list नहीं मिली।');
    renderDirectory();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
    render();
