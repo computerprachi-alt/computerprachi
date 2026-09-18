@@ -181,7 +181,7 @@ function renderDirectory(){
 
  selectedTutors.forEach(t=>{
    getSubjects(t).forEach(subject=>{
-     const key=subject.toLowerCase();
+     const key=subject;
      if(!subjects[key]) subjects[key]={name:subject,count:0};
      subjects[key].count++;
    });
@@ -290,7 +290,7 @@ document.getElementById('directoryDistrict').addEventListener('change',()=>{dire
 fetch(CP_TUTOR_API+'?action=approved_tutors')
  .then(r=>r.json()).then(res=>{
    if(!res.success) throw new Error(res.error||'Tutor list नहीं मिली।');
-   tutors=res.tutors||[];
+   tutors=Array.isArray(res)?res:(Array.isArray(res.tutors)?res.tutors:(Array.isArray(res.approved_tutors)?res.approved_tutors:[]));
    renderDirectory();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
    render();
