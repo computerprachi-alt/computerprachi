@@ -42,9 +42,10 @@ function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':
 function renderDistrictCounts(){
  const counts={};
  tutors.forEach(t=>{
-   const status=String(t.VerificationStatus??t.verificationStatus??t['Verification Status']??'').trim().toLowerCase();
-   if(status!=='approved') return;
-   const district=String(t.district??t.District??t.city??t.City??'').trim();
+   const rawLocation=String(t.district??t.District??t.city??t.City??'').trim();
+   if(!rawLocation) return;
+   const parts=rawLocation.split(',').map(part=>part.trim()).filter(Boolean);
+   const district=parts.length ? parts[parts.length-1] : '';
    if(!district) return;
    const key=district.toLowerCase();
    if(!counts[key]) counts[key]={name:district,count:0};
@@ -56,7 +57,9 @@ function renderDistrictCounts(){
    container.innerHTML='<div class="empty">अभी कोई approved teacher district data उपलब्ध नहीं है।</div>';
    return;
  }
- container.innerHTML=entries.map(item=>`<div class="district-count"><span>${esc(item.name)}</span><span class="count">${item.count} Approved</span></div>`).join('');
+ container.innerHTML=entries.map(item=>
+   `<div class="district-count"><span>${esc(item.name)}</span><span class="count">${item.count} Approved</span></div>`
+ ).join('');
 }
 function render(){
  const q=document.getElementById('search').value.trim().toLowerCase();
