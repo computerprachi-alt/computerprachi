@@ -61,44 +61,34 @@ let directorySubject='';
 let directoryArea='';
 let directoryInitialized=false;
 
-function getDirectoryLocation(t){
- const districtValue=String(t.district??t.District??'').trim();
- const cityValue=String(t.city??t.City??'').trim();
- const areaValue=String(t.area??t.Area??'').trim();
- const state=String(t.state??t.State??t.stateName??t.StateName??'').trim();
-
- let raw=districtValue||cityValue;
- let parts=raw.split(',').map(part=>part.trim()).filter(Boolean);
- let district=parts.length?parts[parts.length-1]:'';
- let parsedArea=parts.length>1?parts.slice(0,-1).join(', '):'';
-
- if(!district && cityValue){
-   parts=cityValue.split(',').map(part=>part.trim()).filter(Boolean);
-   district=parts.length?parts[parts.length-1]:'';
-   parsedArea=parts.length>1?parts.slice(0,-1).join(', '):'';
- }
-
- const area=areaValue||parsedArea;
- return {raw,district,area,state};
+function getState(t){
+ return String(t.state||'').trim();
 }
-
+function getDistrict(t){
+ return String(t.district||t.city||'').trim();
+}
+function getArea(t){
+ return String(t.area||'').trim();
+}
+function getStateKey(t){
+ return getState(t).toLowerCase();
+}
+function getDistrictKey(t){
+ return getDistrict(t).toLowerCase();
+}
+function getAreaKey(t){
+ return getArea(t).toLowerCase();
+}
 function getSubjects(t){
- return String(t.subjects??t.Subjects??t.subject??t.Subject??'')
-   .split(/[,|;/]+/)
-   .map(v=>v.trim())
-   .filter(Boolean);
+ return String(t.subjects||'').split(/[,|;/]+/).map(v=>v.trim()).filter(Boolean);
 }
-
 function getDirectoryTutors(){
- const state=document.getElementById('directoryState').value.trim().toLowerCase();
- const district=document.getElementById('directoryDistrict').value.trim().toLowerCase();
+ const state=String(document.getElementById('directoryState').value||'').trim().toLowerCase();
+ const district=String(document.getElementById('directoryDistrict').value||'').trim().toLowerCase();
  return tutors.filter(t=>{
-   const loc=getDirectoryLocation(t);
-   return (!state||loc.state.toLowerCase()===state)&&
-          (!district||loc.district.toLowerCase()===district);
+   return (!state||getStateKey(t)===state)&&(!district||getDistrictKey(t)===district);
  });
 }
-
 function renderCountList(containerId,items,activeValue,handler){
  const container=document.getElementById(containerId);
  if(!items.length){
@@ -110,124 +100,86 @@ function renderCountList(containerId,items,activeValue,handler){
    btn.addEventListener('click',()=>handler(btn.dataset.value));
  });
 }
-
 function renderDirectory(){
  const stateSelect=document.getElementById('directoryState');
  const districtSelect=document.getElementById('directoryDistrict');
-
- const previousState=stateSelect.value.trim();
+ const previousState=String(stateSelect.value||'').trim();
  const stateCounts={};
  tutors.forEach(t=>{
-   const state=getDirectoryLocation(t).state;
+   const state=getState(t);
    if(state){
      const key=state.toLowerCase();
      stateCounts[key]=(stateCounts[key]||0)+1;
    }
  });
- stateSelect.innerHTML=INDIAN_STATES_AND_UTS
-   .map(s=>`<option value="${esc(s)}">${esc(s)} (${stateCounts[s.toLowerCase()]||0})</option>`).join('');
-
+ stateSelect.innerHTML=INDIAN_STATES_AND_UTS.map(s=>`<option value="${esc(s)}">${esc(s)} (${stateCounts[s.toLowerCase()]||0})</option>`).join('');
  if(directoryInitialized && INDIAN_STATES_AND_UTS.some(s=>s.toLowerCase()===previousState.toLowerCase())){
    stateSelect.value=INDIAN_STATES_AND_UTS.find(s=>s.toLowerCase()===previousState.toLowerCase());
  }else{
    stateSelect.value='Bihar';
  }
  directoryInitialized=true;
-
- const selectedState=stateSelect.value.toLowerCase();
+ const selectedState=getStateKey({state:stateSelect.value});
  const districts={};
-
  tutors.forEach(t=>{
-   const loc=getDirectoryLocation(t);
-   if(loc.state.toLowerCase()===selectedState && loc.district){
-     const key=loc.district.toLowerCase();
-     if(!districts[key]) districts[key]={name:loc.district,count:0};
-     districts[key].count++;
+   if(getStateKey(t)===selectedState){
+     const name=getDistrict(t);
+     if(name){
+       const key=name.toLowerCase();
+       if(!districts[key]) districts[key]={name,count:0};
+       districts[key].count++;
+     }
    }
  });
-
  const districtEntries=Object.values(districts).sort((a,b)=>a.name.localeCompare(b.name));
- const previousDistrict=districtSelect.value.trim().toLowerCase();
- districtSelect.innerHTML='<option value="">All Districts</option>'+
-   districtEntries.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} (${d.count})</option>`).join('');
-
+ const previousDistrict=String(districtSelect.value||'').trim().toLowerCase();
+ districtSelect.innerHTML='<option value="">All Districts</option>'+districtEntries.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} (${d.count})</option>`).join('');
  if(previousDistrict && districtEntries.some(d=>d.name.toLowerCase()===previousDistrict)){
    districtSelect.value=districtEntries.find(d=>d.name.toLowerCase()===previousDistrict).name;
  }else{
    districtSelect.value='';
  }
-
- const selectedDistrict=districtSelect.value.trim();
  const selectedTutors=getDirectoryTutors();
-
- document.getElementById('directorySummary').textContent=
-   selectedTutors.length+' approved teachers'+
-   (selectedDistrict?' in '+selectedDistrict:' in '+stateSelect.value);
-
- renderCountList(
-   'districtCounts',
-   districtEntries,
-   selectedDistrict,
-   name=>{
-     directorySubject='';
-     directoryArea='';
-     districtSelect.value=name;
-     renderDirectory();
-     render();
-   }
- );
-
+ const selectedDistrict=String(districtSelect.value||'').trim();
+ document.getElementById('directorySummary').textContent=selectedTutors.length+' approved teachers'+(selectedDistrict?' in '+selectedDistrict:' in '+stateSelect.value);
+ renderCountList('districtCounts',districtEntries,selectedDistrict,name=>{
+   directorySubject='';
+   directoryArea='';
+   districtSelect.value=name;
+   renderDirectory();
+   render();
+ });
  const subjects={},areas={};
-
  selectedTutors.forEach(t=>{
    getSubjects(t).forEach(subject=>{
-     const key=subject;
-     if(!subjects[key]) subjects[key]={name:subject,count:0};
-     subjects[key].count++;
+     if(!subjects[subject]) subjects[subject]={name:subject,count:0};
+     subjects[subject].count++;
    });
-
-   const area=getDirectoryLocation(t).area;
+   const area=getArea(t);
    if(area){
-     const key=area.toLowerCase();
-     if(!areas[key]) areas[key]={name:area,count:0};
-     areas[key].count++;
+     if(!areas[area]) areas[area]={name:area,count:0};
+     areas[area].count++;
    }
  });
-
- renderCountList(
-   'subjectCounts',
-   Object.values(subjects).sort((a,b)=>a.name.localeCompare(b.name)),
-   directorySubject,
-   name=>{
-     directorySubject=directorySubject.toLowerCase()===name.toLowerCase()?'':name;
-     renderDirectory();
-     render();
-   }
- );
-
- renderCountList(
-   'areaCounts',
-   Object.values(areas).sort((a,b)=>a.name.localeCompare(b.name)),
-   directoryArea,
-   name=>{
-     directoryArea=directoryArea.toLowerCase()===name.toLowerCase()?'':name;
-     renderDirectory();
-     render();
-   }
- );
+ renderCountList('subjectCounts',Object.values(subjects).sort((a,b)=>a.name.localeCompare(b.name)),directorySubject,name=>{
+   directorySubject=directorySubject===name?'':name;
+   renderDirectory();
+   render();
+ });
+ renderCountList('areaCounts',Object.values(areas).sort((a,b)=>a.name.localeCompare(b.name)),directoryArea,name=>{
+   directoryArea=directoryArea===name?'':name;
+   renderDirectory();
+   render();
+ });
 }
-
-
 function render(){
  const q=document.getElementById('search').value.trim().toLowerCase();
  const directoryList=getDirectoryTutors().filter(t=>{
    const subjects=getSubjects(t).map(s=>s.toLowerCase());
-   const area=getDirectoryLocation(t).area.toLowerCase();
+   const area=getAreaKey(t);
    return (!directorySubject||subjects.includes(directorySubject.toLowerCase()))&&(!directoryArea||area===directoryArea.toLowerCase());
  });
- const list=directoryList.filter(t=>[
-   t.name,t.qualification,t.subjects,t.classes,t.board,t.experience,t.mode,t.city,t.area
- ].join(' ').toLowerCase().includes(q));
+ const list=directoryList.filter(t=>[t.name,t.qualification,t.subjects,t.classes,t.board,t.experience,t.mode,t.city,t.area].join(' ').toLowerCase().includes(q));
  const cards=document.getElementById('cards');
  if(!list.length){cards.innerHTML='<div class="empty">कोई approved tutor नहीं मिला।</div>';return}
  cards.innerHTML=list.map(t=>`<div class="card">
@@ -239,7 +191,7 @@ function render(){
  <button class="unlock" onclick="unlock('${encodeURIComponent(t.registrationId)}',this)">🔓 View Full Teacher Profile – ₹10</button>
  </div>`).join('');
 }
- function unlock(id,btn){
+function unlock(id,btn){
   const tutorRegistrationId=decodeURIComponent(id);
 
   const studentNameInput=prompt('Student Name (optional):');
@@ -283,13 +235,13 @@ function render(){
     btn.textContent='🔓 View Full Teacher Profile – ₹10';
   });
 }
-
 document.getElementById('search').addEventListener('input',render);
 document.getElementById('directoryState').addEventListener('change',()=>{directorySubject='';directoryArea='';document.getElementById('directoryDistrict').value='';renderDirectory();render();});
 document.getElementById('directoryDistrict').addEventListener('change',()=>{directorySubject='';directoryArea='';renderDirectory();render();});
 fetch(CP_TUTOR_API+'?action=approved_tutors')
- .then(r=>r.json()).then(res=>{
-   tutors=Array.isArray(res)?res:(Array.isArray(res.tutors)?res.tutors:(Array.isArray(res.approved_tutors)?res.approved_tutors:[]));
+ .then(r=>r.json()).then(response=>{
+   const tutorsFromApi=Array.isArray(response.tutors)?response.tutors:[];
+   tutors=tutorsFromApi;
    if(!tutors.length) throw new Error('Tutor list नहीं मिली।');
    renderDirectory();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
