@@ -11,7 +11,7 @@
 .head h1{margin:0;font-size:28px}.head p{margin:7px 0 0;font-size:14px}.nav{background:#102d69;text-align:center;padding:9px}.nav a{color:#fff;text-decoration:none;font-weight:700;margin:0 9px;font-size:13px}
 .main{padding:16px}.intro{border:1px solid #cbd9ec;border-left:6px solid #c40000;background:#f8fbff;padding:15px;border-radius:9px;margin-bottom:14px}.intro h2{margin:0 0 6px;color:#102d69}
 .search{width:100%;padding:11px;border:1px solid #bcc8d8;border-radius:6px;margin:10px 0 14px;font-size:14px}
-.status{text-align:center;padding:12px;background:#f7f7f7;border-radius:7px;margin-bottom:12px}.district-counts{border:1px solid #cbd9ec;background:#f8fbff;border-radius:9px;padding:12px;margin-bottom:14px}.district-counts h2{margin:0 0 10px;color:#102d69;font-size:18px;text-align:center}.district-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.district-count{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid #d9e0e9;border-radius:6px;background:#fff;font-weight:700}.district-count .count{color:#c40000;white-space:nowrap}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.status{text-align:center;padding:12px;background:#f7f7f7;border-radius:7px;margin-bottom:12px}.district-counts{border:1px solid #cbd9ec;background:#f8fbff;border-radius:9px;padding:12px;margin-bottom:14px}.district-counts h2{margin:0 0 10px;color:#102d69;font-size:18px;text-align:center}.district-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.district-count{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid #d9e0e9;border-radius:6px;background:#fff;font-weight:700}.directory-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.directory-controls label{font-weight:700;color:#102d69}.directory-controls select{display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #bcc8d8;border-radius:6px;background:#fff}.directory-columns{display:grid;grid-template-columns:1fr;gap:14px}.directory-columns h3{margin:0 0 8px;color:#102d69;font-size:15px}.directory-item{cursor:pointer}.directory-item:hover{background:#f1f6ff}.directory-item.active{border-color:#102d69;background:#eef4ff}.district-counts .status{margin:0}.district-counts .empty{grid-column:1/-1}.district-counts .district-grid{grid-template-columns:repeat(2,1fr)}.district-count .count{color:#c40000;white-space:nowrap}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .card{border:1px solid #d9e0e9;border-radius:9px;padding:14px;background:#fff}.card h3{margin:0 0 7px;color:#102d69}.line{padding:4px 0;line-height:1.45}.unlock{display:block;width:100%;margin-top:11px;padding:11px;border:0;border-radius:6px;background:#087c18;color:#fff;font-size:15px;font-weight:800;cursor:pointer}.unlock:disabled{background:#777}.empty{text-align:center;padding:25px;border:1px dashed #bbb}.note{font-size:12px;line-height:1.5;background:#fff8e5;border:1px solid #efd58c;padding:10px;border-radius:6px;margin-top:14px}
 @media(max-width:650px){.cards{grid-template-columns:1fr}.district-grid{grid-template-columns:1fr 1fr}.head h1{font-size:23px}}@media(max-width:430px){.district-grid{grid-template-columns:1fr}}
 </style>
@@ -27,9 +27,18 @@
 </section>
 <input id="search" class="search" placeholder="Teacher, subject, class, city या area खोजें...">
 <div id="status" class="status">⏳ Approved teachers load हो रहे हैं...</div>
-<section class="district-counts" aria-label="District-wise approved teacher counts">
-<h2>📍 District-wise Approved Teachers</h2>
-<div id="districtCounts" class="district-grid"></div>
+<section class="district-counts" aria-label="State District Subject Area teacher directory">
+<h2>📍 Teacher Directory</h2>
+<div class="directory-controls">
+<label>State<select id="directoryState"></select></label>
+<label>District<select id="directoryDistrict"><option value="">All Districts</option></select></label>
+</div>
+<div id="directorySummary" class="status"></div>
+<div class="directory-columns">
+<div><h3>District-wise Approved Teachers</h3><div id="districtCounts" class="district-grid"></div></div>
+<div><h3>Subject-wise Approved Teachers</h3><div id="subjectCounts" class="district-grid"></div></div>
+<div><h3>Area / Locality-wise Approved Teachers</h3><div id="areaCounts" class="district-grid"></div></div>
+</div>
 </section>
 <div id="cards" class="cards"></div>
 <div class="note"><b>₹10 Profile Unlock:</b> Payment के बाद verified Razorpay payment callback पर पूरा teacher profile और payment receipt खुलेगा।</div>
@@ -39,31 +48,70 @@
 const CP_TUTOR_API='https://script.google.com/macros/s/AKfycbwAqk8mkzrCPxowUhMrCfM3Mnw11p2wDnbySTQ4pBFK2i9fTYe40ocAa0huzgcx8bfpmw/exec';
 let tutors=[];
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]})}
-function renderDistrictCounts(){
- const counts={};
- tutors.forEach(t=>{
-   const rawLocation=String(t.district??t.District??t.city??t.City??'').trim();
-   if(!rawLocation) return;
-   const parts=rawLocation.split(',').map(part=>part.trim()).filter(Boolean);
-   const district=parts.length ? parts[parts.length-1] : '';
-   if(!district) return;
-   const key=district.toLowerCase();
-   if(!counts[key]) counts[key]={name:district,count:0};
-   counts[key].count++;
- });
- const entries=Object.values(counts).sort((a,b)=>a.name.localeCompare(b.name));
- const container=document.getElementById('districtCounts');
- if(!entries.length){
-   container.innerHTML='<div class="empty">अभी कोई approved teacher district data उपलब्ध नहीं है।</div>';
-   return;
- }
- container.innerHTML=entries.map(item=>
-   `<div class="district-count"><span>${esc(item.name)}</span><span class="count">${item.count} Approved</span></div>`
- ).join('');
+let directorySubject='';
+let directoryArea='';
+function getDirectoryLocation(t){
+ const raw=String(t.district??t.District??t.city??t.City??'').trim();
+ const parts=raw.split(',').map(part=>part.trim()).filter(Boolean);
+ const district=parts.length?parts[parts.length-1]:'';
+ const area=String(t.area??t.Area??'').trim() || (parts.length>1?parts.slice(0,-1).join(', '):'');
+ const state=String(t.state??t.State??t.stateName??t.StateName??'').trim();
+ return {raw,district,area,state};
 }
+function getSubjects(t){
+ return String(t.subjects??t.Subjects??t.subject??t.Subject??'').split(/[,|;/]+/).map(v=>v.trim()).filter(Boolean);
+}
+function getDirectoryTutors(){
+ const state=document.getElementById('directoryState').value.toLowerCase();
+ const district=document.getElementById('directoryDistrict').value.toLowerCase();
+ return tutors.filter(t=>{
+   const loc=getDirectoryLocation(t);
+   return (!state||loc.state.toLowerCase()===state)&&(!district||loc.district.toLowerCase()===district);
+ });
+}
+function renderCountList(containerId,items,activeValue,handler){
+ const container=document.getElementById(containerId);
+ if(!items.length){container.innerHTML='<div class="empty">कोई data उपलब्ध नहीं है।</div>';return;}
+ container.innerHTML=items.map(item=>`<button type="button" class="district-count directory-item ${item.name.toLowerCase()===activeValue.toLowerCase()?'active':''}" data-value="${esc(item.name)}"><span>${esc(item.name)}</span><span class="count">${item.count}</span></button>`).join('');
+ container.querySelectorAll('.directory-item').forEach(btn=>btn.addEventListener('click',()=>handler(btn.dataset.value)));
+}
+function renderDirectory(){
+ const stateSelect=document.getElementById('directoryState');
+ const districtSelect=document.getElementById('directoryDistrict');
+ const states={};
+ tutors.forEach(t=>{const s=getDirectoryLocation(t).state;if(s){const k=s.toLowerCase();if(!states[k])states[k]=s;}});
+ const stateEntries=Object.values(states).sort((a,b)=>a.localeCompare(b));
+ const oldState=stateSelect.value;
+ stateSelect.innerHTML=stateEntries.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+ if(stateEntries.length) stateSelect.value=stateEntries.find(s=>s.toLowerCase()===oldState.toLowerCase())||stateEntries[0];
+ const selectedState=stateSelect.value.toLowerCase();
+ const districts={};
+ tutors.forEach(t=>{const loc=getDirectoryLocation(t);if(loc.state.toLowerCase()===selectedState&&loc.district){const k=loc.district.toLowerCase();if(!districts[k])districts[k]={name:loc.district,count:0};districts[k].count++;}});
+ const districtEntries=Object.values(districts).sort((a,b)=>a.name.localeCompare(b.name));
+ const oldDistrict=districtSelect.value;
+ districtSelect.innerHTML='<option value="">All Districts</option>'+districtEntries.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} (${d.count})</option>`).join('');
+ if(districtEntries.some(d=>d.name.toLowerCase()===oldDistrict.toLowerCase())) districtSelect.value=oldDistrict;
+ const selected=districtSelect.value?districtEntries.find(d=>d.name.toLowerCase()===districtSelect.value.toLowerCase()):null;
+ const stateTutors=tutors.filter(t=>getDirectoryLocation(t).state.toLowerCase()===selectedState);
+ document.getElementById('directorySummary').textContent=(selected?selected.count:stateTutors.length)+' approved teachers'+(selected?' in '+selected.name:' in '+stateSelect.value);
+ renderCountList('districtCounts',districtEntries,districtSelect.value,name=>{directorySubject='';directoryArea='';districtSelect.value=name;renderDirectory();render();});
+ const selectedTutors=getDirectoryTutors(),subjects={},areas={};
+ selectedTutors.forEach(t=>{getSubjects(t).forEach(s=>{const k=s.toLowerCase();if(!subjects[k])subjects[k]={name:s,count:0};subjects[k].count++;});const a=getDirectoryLocation(t).area;if(a){const k=a.toLowerCase();if(!areas[k])areas[k]={name:a,count:0};areas[k].count++;}});
+ renderCountList('subjectCounts',Object.values(subjects).sort((a,b)=>a.name.localeCompare(b.name)),directorySubject,name=>{directorySubject=name;directoryArea='';renderDirectoryDetails();render();});
+ renderCountList('areaCounts',Object.values(areas).sort((a,b)=>a.name.localeCompare(b.name)),directoryArea,name=>{directoryArea=name;renderDirectoryDetails();render();});
+}
+function renderDirectoryDetails(){
+ renderDirectory();
+}
+
 function render(){
  const q=document.getElementById('search').value.trim().toLowerCase();
- const list=tutors.filter(t=>[
+ const directoryList=getDirectoryTutors().filter(t=>{
+   const subjects=getSubjects(t).map(s=>s.toLowerCase());
+   const area=getDirectoryLocation(t).area.toLowerCase();
+   return (!directorySubject||subjects.includes(directorySubject.toLowerCase()))&&(!directoryArea||area===directoryArea.toLowerCase());
+ });
+ const list=directoryList.filter(t=>[
    t.name,t.qualification,t.subjects,t.classes,t.board,t.experience,t.mode,t.city,t.area
  ].join(' ').toLowerCase().includes(q));
  const cards=document.getElementById('cards');
@@ -123,11 +171,13 @@ function render(){
 }
 
 document.getElementById('search').addEventListener('input',render);
+document.getElementById('directoryState').addEventListener('change',()=>{directorySubject='';directoryArea='';document.getElementById('directoryDistrict').value='';renderDirectory();render();});
+document.getElementById('directoryDistrict').addEventListener('change',()=>{directorySubject='';directoryArea='';renderDirectory();render();});
 fetch(CP_TUTOR_API+'?action=approved_tutors')
  .then(r=>r.json()).then(res=>{
    if(!res.success) throw new Error(res.error||'Tutor list नहीं मिली।');
    tutors=res.tutors||[];
-   renderDistrictCounts();
+   renderDirectory();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
    render();
  }).catch(err=>{document.getElementById('status').textContent='❌ Tutor list load नहीं हो सकी: '+err.message});
