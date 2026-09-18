@@ -11,9 +11,9 @@
 .head h1{margin:0;font-size:28px}.head p{margin:7px 0 0;font-size:14px}.nav{background:#102d69;text-align:center;padding:9px}.nav a{color:#fff;text-decoration:none;font-weight:700;margin:0 9px;font-size:13px}
 .main{padding:16px}.intro{border:1px solid #cbd9ec;border-left:6px solid #c40000;background:#f8fbff;padding:15px;border-radius:9px;margin-bottom:14px}.intro h2{margin:0 0 6px;color:#102d69}
 .search{width:100%;padding:11px;border:1px solid #bcc8d8;border-radius:6px;margin:10px 0 14px;font-size:14px}
-.status{text-align:center;padding:12px;background:#f7f7f7;border-radius:7px;margin-bottom:12px}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.status{text-align:center;padding:12px;background:#f7f7f7;border-radius:7px;margin-bottom:12px}.district-counts{border:1px solid #cbd9ec;background:#f8fbff;border-radius:9px;padding:12px;margin-bottom:14px}.district-counts h2{margin:0 0 10px;color:#102d69;font-size:18px;text-align:center}.district-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.district-count{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid #d9e0e9;border-radius:6px;background:#fff;font-weight:700}.district-count .count{color:#c40000;white-space:nowrap}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .card{border:1px solid #d9e0e9;border-radius:9px;padding:14px;background:#fff}.card h3{margin:0 0 7px;color:#102d69}.line{padding:4px 0;line-height:1.45}.unlock{display:block;width:100%;margin-top:11px;padding:11px;border:0;border-radius:6px;background:#087c18;color:#fff;font-size:15px;font-weight:800;cursor:pointer}.unlock:disabled{background:#777}.empty{text-align:center;padding:25px;border:1px dashed #bbb}.note{font-size:12px;line-height:1.5;background:#fff8e5;border:1px solid #efd58c;padding:10px;border-radius:6px;margin-top:14px}
-@media(max-width:650px){.cards{grid-template-columns:1fr}.head h1{font-size:23px}}
+@media(max-width:650px){.cards{grid-template-columns:1fr}.district-grid{grid-template-columns:1fr 1fr}.head h1{font-size:23px}}@media(max-width:430px){.district-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -27,6 +27,10 @@
 </section>
 <input id="search" class="search" placeholder="Teacher, subject, class, city या area खोजें...">
 <div id="status" class="status">⏳ Approved teachers load हो रहे हैं...</div>
+<section class="district-counts" aria-label="District-wise approved teacher counts">
+<h2>📍 District-wise Approved Teachers</h2>
+<div id="districtCounts" class="district-grid"></div>
+</section>
 <div id="cards" class="cards"></div>
 <div class="note"><b>₹10 Profile Unlock:</b> Payment के बाद verified Razorpay payment callback पर पूरा teacher profile और payment receipt खुलेगा।</div>
 </main>
@@ -35,6 +39,25 @@
 const CP_TUTOR_API='https://script.google.com/macros/s/AKfycbwAqk8mkzrCPxowUhMrCfM3Mnw11p2wDnbySTQ4pBFK2i9fTYe40ocAa0huzgcx8bfpmw/exec';
 let tutors=[];
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]})}
+function renderDistrictCounts(){
+ const counts={};
+ tutors.forEach(t=>{
+   const status=String(t.VerificationStatus??t.verificationStatus??t['Verification Status']??'').trim().toLowerCase();
+   if(status!=='approved') return;
+   const district=String(t.district??t.District??t.city??t.City??'').trim();
+   if(!district) return;
+   const key=district.toLowerCase();
+   if(!counts[key]) counts[key]={name:district,count:0};
+   counts[key].count++;
+ });
+ const entries=Object.values(counts).sort((a,b)=>a.name.localeCompare(b.name));
+ const container=document.getElementById('districtCounts');
+ if(!entries.length){
+   container.innerHTML='<div class="empty">अभी कोई approved teacher district data उपलब्ध नहीं है।</div>';
+   return;
+ }
+ container.innerHTML=entries.map(item=>`<div class="district-count"><span>${esc(item.name)}</span><span class="count">${item.count} Approved</span></div>`).join('');
+}
 function render(){
  const q=document.getElementById('search').value.trim().toLowerCase();
  const list=tutors.filter(t=>[
@@ -101,6 +124,7 @@ fetch(CP_TUTOR_API+'?action=approved_tutors')
  .then(r=>r.json()).then(res=>{
    if(!res.success) throw new Error(res.error||'Tutor list नहीं मिली।');
    tutors=res.tutors||[];
+   renderDistrictCounts();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
    render();
  }).catch(err=>{document.getElementById('status').textContent='❌ Tutor list load नहीं हो सकी: '+err.message});
