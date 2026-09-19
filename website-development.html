@@ -141,6 +141,11 @@
       background: #064681;
     }
 
+    .wd-submit:disabled {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
     .wd-contact {
       text-align: center;
       background: #eef6ff;
@@ -157,6 +162,41 @@
       color: #666;
       margin-top: 12px;
       text-align: center;
+    }
+
+    .wd-success {
+      display: none;
+      margin-top: 15px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #eaf8ee;
+      border: 1px solid #9bd2a8;
+      color: #176b2a;
+      font-weight: 700;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .wd-home {
+      display: inline-block;
+      margin-bottom: 18px;
+      padding: 10px 16px;
+      border-radius: 7px;
+      background: #07145c;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .wd-home:hover {
+      background: #c40000;
+    }
+
+    .wd-submit-frame {
+      display: none;
+      width: 0;
+      height: 0;
+      border: 0;
     }
 
     @media (max-width: 700px) {
@@ -187,6 +227,8 @@
   </header>
 
   <main class="wd-container">
+
+    <a class="wd-home" href="https://computerprachi.online/index.html">🏠 Back to Home</a>
 
     <section class="wd-card">
       <h2>Website Development Services</h2>
@@ -245,38 +287,44 @@
     <section class="wd-card">
       <h2>📝 Website Development Enquiry</h2>
 
-      <form id="websiteEnquiryForm">
+      <form
+        id="websiteEnquiryForm"
+        action="https://script.google.com/macros/s/AKfycbxEdMpi1osuCyCAhdfBovZtjWcZZfF0PnZRFmuNQzYTiuXEhJWeaOe2t-McIcJQh9RFA/exec"
+        method="POST"
+        target="websiteEnquiryFrame"
+        onsubmit="prepareWebsiteEnquiry()"
+      >
 
         <div class="wd-form-grid">
 
           <div class="wd-field">
             <label for="name">Name *</label>
-            <input type="text" id="name" required>
+            <input type="text" id="name" name="name" required>
           </div>
 
           <div class="wd-field">
             <label for="mobile">Mobile Number *</label>
-            <input type="tel" id="mobile" required>
+            <input type="tel" id="mobile" name="mobile" required>
           </div>
 
           <div class="wd-field">
             <label for="whatsapp">WhatsApp Number</label>
-            <input type="tel" id="whatsapp">
+            <input type="tel" id="whatsapp" name="whatsapp">
           </div>
 
           <div class="wd-field">
             <label for="email">Email</label>
-            <input type="email" id="email">
+            <input type="email" id="email" name="email">
           </div>
 
           <div class="wd-field">
             <label for="purpose">Website किस काम के लिए चाहिए? *</label>
-            <input type="text" id="purpose" required>
+            <input type="text" id="purpose" name="purpose" required>
           </div>
 
           <div class="wd-field">
-            <label for="type">Website Type *</label>
-            <select id="type" required>
+            <label for="websiteType">Website Type *</label>
+            <select id="websiteType" name="websiteType" required>
               <option value="">Select Website Type</option>
               <option>Business Website</option>
               <option>School / College Website</option>
@@ -290,12 +338,12 @@
 
           <div class="wd-field">
             <label for="budget">Approximate Budget</label>
-            <input type="text" id="budget" placeholder="Example: ₹5,000 - ₹10,000">
+            <input type="text" id="budget" name="budget" placeholder="Example: ₹5,000 - ₹10,000">
           </div>
 
           <div class="wd-field">
-            <label for="emailPreference">Preferred Contact</label>
-            <select id="emailPreference">
+            <label for="preferredContact">Preferred Contact</label>
+            <select id="preferredContact" name="preferredContact">
               <option>Phone Call</option>
               <option>WhatsApp</option>
               <option>Email</option>
@@ -304,26 +352,36 @@
 
           <div class="wd-field full">
             <label for="features">Website में क्या-क्या चाहिए? *</label>
-            <textarea id="features" required placeholder="Pages, forms, login, payment, search, etc."></textarea>
+            <textarea id="features" name="features" required placeholder="Pages, forms, login, payment, search, etc."></textarea>
           </div>
 
           <div class="wd-field full">
             <label for="message">Message / Requirements *</label>
-            <textarea id="message" required placeholder="अपनी पूरी requirement यहाँ लिखें..."></textarea>
+            <textarea id="message" name="message" required placeholder="अपनी पूरी requirement यहाँ लिखें..."></textarea>
           </div>
 
         </div>
 
-        <button type="submit" class="wd-submit">
+        <button type="submit" class="wd-submit" id="wdSubmitButton">
           📩 Send Website Enquiry
         </button>
 
         <div class="wd-note">
-          Enquiry details will be prepared for sending to
-          computerprachi@gmail.com
+          Your enquiry will be securely submitted to Computer Prachi.
+        </div>
+
+        <div class="wd-success" id="wdSuccessMessage" role="status" aria-live="polite">
+          Thank you! Aapki Website Development Enquiry successfully send ho gayi hai. Computer Prachi aapse jaldi contact karega.
         </div>
 
       </form>
+
+      <iframe
+        name="websiteEnquiryFrame"
+        id="websiteEnquiryFrame"
+        class="wd-submit-frame"
+        title="Website enquiry submission"
+      ></iframe>
     </section>
 
     <section class="wd-card wd-contact">
@@ -344,42 +402,37 @@
   </main>
 
   <script>
-    document.getElementById("websiteEnquiryForm").addEventListener("submit", function(event) {
-      event.preventDefault();
+    let websiteEnquirySubmitted = false;
 
-      const name = document.getElementById("name").value.trim();
-      const mobile = document.getElementById("mobile").value.trim();
-      const whatsapp = document.getElementById("whatsapp").value.trim();
-      const email = document.getElementById("email").value.trim();
-      const purpose = document.getElementById("purpose").value.trim();
-      const type = document.getElementById("type").value;
-      const budget = document.getElementById("budget").value.trim();
-      const contactPreference = document.getElementById("emailPreference").value;
-      const features = document.getElementById("features").value.trim();
-      const message = document.getElementById("message").value.trim();
+    function prepareWebsiteEnquiry() {
+      websiteEnquirySubmitted = true;
 
-      const subject = "Computer Prachi Website Development Enquiry";
+      const button = document.getElementById("wdSubmitButton");
+      const success = document.getElementById("wdSuccessMessage");
 
-      const body =
-        "Website Development Enquiry%0A%0A" +
-        "Name: " + encodeURIComponent(name) + "%0A" +
-        "Mobile Number: " + encodeURIComponent(mobile) + "%0A" +
-        "WhatsApp Number: " + encodeURIComponent(whatsapp) + "%0A" +
-        "Email: " + encodeURIComponent(email) + "%0A" +
-        "Website Purpose: " + encodeURIComponent(purpose) + "%0A" +
-        "Website Type: " + encodeURIComponent(type) + "%0A" +
-        "Approximate Budget: " + encodeURIComponent(budget) + "%0A" +
-        "Preferred Contact: " + encodeURIComponent(contactPreference) + "%0A%0A" +
-        "Website Requirements:%0A" +
-        encodeURIComponent(features) + "%0A%0A" +
-        "Message / Requirements:%0A" +
-        encodeURIComponent(message);
+      button.disabled = true;
+      button.textContent = "📩 Sending Enquiry...";
 
-      window.location.href =
-        "mailto:computerprachi@gmail.com?subject=" +
-        encodeURIComponent(subject) +
-        "&body=" +
-        body;
+      success.style.display = "none";
+
+      // Allow the browser to serialize and POST the form before clearing it.
+      window.setTimeout(function () {
+        document.getElementById("websiteEnquiryForm").reset();
+      }, 100);
+    }
+
+    document.getElementById("websiteEnquiryFrame").addEventListener("load", function () {
+      if (!websiteEnquirySubmitted) {
+        return;
+      }
+
+      const button = document.getElementById("wdSubmitButton");
+      const success = document.getElementById("wdSuccessMessage");
+
+      success.style.display = "block";
+      button.disabled = false;
+      button.textContent = "📩 Send Website Enquiry";
+      websiteEnquirySubmitted = false;
     });
   </script>
 
