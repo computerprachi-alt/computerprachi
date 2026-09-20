@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔎 Find Room — Computer Prachi</title>
+<style>
+:root{--primary:#173b73;--accent:#ff7a00;--bg:#f4f7fb;--card:#fff;--text:#222;--muted:#666;--border:#d8dee8}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.header{background:var(--primary);color:#fff;padding:18px 16px;text-align:center}.header h1{margin:0;font-size:25px}
+.container{max-width:900px;margin:25px auto;padding:0 16px}.card{background:var(--card);border-radius:10px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.card h2{margin-top:0;color:var(--primary)}.intro{color:var(--muted);line-height:1.5}
+.notice{background:#fff4e8;border-left:4px solid var(--accent);padding:12px 14px;margin:18px 0;line-height:1.5}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.field{display:flex;flex-direction:column}.field.full{grid-column:1/-1}
+label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:7px;font:inherit;background:#fff}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;cursor:pointer}
+.btn.alt{background:var(--accent)}.empty{margin-top:24px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;color:var(--muted);line-height:1.5}
+@media(max-width:650px){.header h1{font-size:21px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
+</style>
+</head>
+<body>
+<header class="header"><h1>🔎 Find Room</h1></header>
+<main class="container">
+<section class="card">
+<h2>Find Room in Bhagalpur</h2>
+<p class="intro">Use the filters below to search for available rooms. Listings will appear here after the room data system is added.</p>
+<div class="notice">अभी कोई room listing उपलब्ध नहीं है। Real room listings/data बाद में जोड़ने के बाद यहाँ दिखाई जाएँगी।</div>
+<form onsubmit="return false;">
+<div class="form-grid">
+<div class="field"><label for="area">Area / Locality</label><input id="area" name="area" type="text" placeholder="Enter area or locality"></div>
+<div class="field"><label for="roomType">Room Type</label><select id="roomType" name="roomType"><option value="">All Room Types</option><option>Single Room</option><option>1 RK</option><option>1 BHK</option><option>2 BHK</option><option>PG / Paying Guest</option><option>Hostel</option><option>Other</option></select></div>
+<div class="field"><label for="rent">Monthly Rent</label><input id="rent" name="rent" type="number" min="0" placeholder="Maximum monthly rent"></div>
+<div class="field"><label for="availability">Availability</label><select id="availability" name="availability"><option value="">Any Availability</option><option>Vacant</option><option>Available From Date</option></select></div>
+</div>
+<div class="actions"><button class="btn alt" type="submit">🔎 Search Room</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
+</form>
+<div class="empty"><strong>No room listings yet</strong><br>Room search/data functionality will be connected later. No fake owner or room data is shown.</div>
+</section>
+</main>
+</body>
+</html>
