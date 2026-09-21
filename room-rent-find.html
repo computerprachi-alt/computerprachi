@@ -37,7 +37,7 @@ label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12p
 </section>
 </main>
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec?action=approved_rooms';
 const form = document.getElementById('roomSearchForm');
 const searchButton = document.getElementById('searchButton');
 const statusMessage = document.getElementById('statusMessage');
@@ -50,19 +50,44 @@ function escapeHtml(value) {
 
 function getValue(room, names) {
   for (const name of names) {
-    if (room && room[name] !== undefined && room[name] !== null && String(room[name]).trim() !== '') return room[name];
+    if (room && Object.prototype.hasOwnProperty.call(room, name) && room[name] !== undefined && room[name] !== null && String(room[name]).trim() !== '') return room[name];
   }
   return '';
 }
 
 function normalise(value) {
-  return String(value ?? '').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+  return String(value ?? '').trim().toLowerCase().replace(/[\s_-]+/g,' ');
+}
+
+function getStatusValue(room, candidates) {
+  const direct = getValue(room, candidates);
+  if (direct !== '') return direct;
+  const keys = Object.keys(room || {});
+  const wanted = candidates.map(normalise);
+  const matchedKey = keys.find(key => wanted.includes(normalise(key)));
+  return matchedKey ? room[matchedKey] : '';
 }
 
 function isApprovedVacant(room) {
-  const verification = getValue(room, ['verificationStatus','Verification Status','verification_status','verification','Verification']);
-  const availability = getValue(room, ['availabilityStatus','Availability Status','availability_status','availability','Availability']);
-  return normalise(verification) === 'approved' && normalise(availability) === 'vacant';
+  const verification = getStatusValue(room, ['verificationStatus','Verification Status','verification_status','Verification']);
+  const availability = getStatusValue(room, ['availabilityStatus','Availability Status','availability_status','Availability']);
+  const verificationKnown = verification !== '';
+  const availabilityKnown = availability !== '';
+  const approved = !verificationKnown || normalise(verification) === 'approved';
+  const vacant = availabilityKnown && normalise(availability) === 'vacant';
+  return approved && vacant;
+}
+
+function extractRooms(data) {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.rooms)) return data.rooms;
+  if (Array.isArray(data.approved_rooms)) return data.approved_rooms;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.data)) return data.data;
+  if (data.data && typeof data.data === 'object') return extractRooms(data.data);
+  if (data.result && typeof data.result === 'object') return extractRooms(data.result);
+  return [];
 }
 
 function getPhotoUrls(value) {
@@ -137,24 +162,17 @@ async function loadRooms() {
   statusMessage.textContent = 'Verified vacant rooms are being loaded...';
   results.innerHTML = '';
   try {
-    const response = await fetch(API_URL + '?action=approved_rooms', {method:'GET', cache:'no-store'});
-    if (!response.ok) throw new Error('Server returned HTTP ' + response.status);
-    const text = await response.text();
-    let data;
-    try { data = JSON.parse(text); } catch (_) { throw new Error('The room API returned an invalid response.'); }
-
-    const list = Array.isArray(data)
-      ? data
-      : (Array.isArray(data.rooms) ? data.rooms
-      : Array.isArray(data.data) ? data.data
-      : Array.isArray(data.results) ? data.results
-      : Array.isArray(data.approved_rooms) ? data.approved_rooms
-      : []);
+    const response = await fetch(API_URL, {method:'GET', cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    const list = extractRooms(data);
     rooms = list.filter(isApprovedVacant);
     renderRooms(rooms);
+    console.debug('Room Rent API:', {success: data && data.success, received: list.length, displayed: rooms.length});
   } catch (error) {
+    console.error('Room Rent API load failed:', error);
     statusMessage.textContent = 'Room listings could not be loaded.';
-    results.innerHTML = '<div class="error"><strong>Unable to load room listings.</strong><br>Please check your internet connection and try again. Error: ' + escapeHtml(error.message) + '</div>';
+    results.innerHTML = '<div class="error"><strong>Unable to load room listings.</strong><br>Please try again later.</div>';
   } finally {
     searchButton.disabled = false;
     searchButton.textContent = '🔎 Search Room';
