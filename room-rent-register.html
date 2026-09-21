@@ -15,6 +15,7 @@
 label{font-weight:700;margin-bottom:7px}input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:7px;font:inherit;background:#fff}
 textarea{min-height:110px;resize:vertical}.help{font-size:13px;color:var(--muted);margin-top:5px}
 .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;cursor:pointer}.btn.alt{background:var(--accent)}
+.btn:disabled{opacity:.65;cursor:not-allowed}
 @media(max-width:650px){.header h1{font-size:21px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
 </style>
 </head>
@@ -23,9 +24,9 @@ textarea{min-height:110px;resize:vertical}.help{font-size:13px;color:var(--muted
 <main class="container">
 <section class="card">
 <h2>Register Room / Owner</h2>
-<p class="intro">Enter your room details below. This page currently collects details only and does not save or submit them to a server.</p>
-<div class="notice">यह form अभी केवल room details registration के लिए है। Data saving/payment functionality बाद में जोड़ी जाएगी।</div>
-<form onsubmit="return false;">
+<p class="intro">Enter your room details below and submit the registration form.</p>
+<div class="notice" id="statusMessage">यह form room details registration के लिए है। Submit करने के बाद आपका Room ID और verification/availability status यहाँ दिखाई देगा।</div>
+<form id="roomRentForm">
 <div class="form-grid">
 <div class="field"><label for="ownerName">Owner Name</label><input id="ownerName" name="ownerName" type="text"></div>
 <div class="field"><label for="mobile">Mobile Number</label><input id="mobile" name="mobile" type="tel"></div>
@@ -41,11 +42,112 @@ textarea{min-height:110px;resize:vertical}.help{font-size:13px;color:var(--muted
 <div class="field"><label for="availableDate">Available From Date</label><input id="availableDate" name="availableDate" type="date"></div>
 <div class="field full"><label for="facilities">Facilities</label><textarea id="facilities" name="facilities" placeholder="e.g. Wi-Fi, attached bathroom, parking"></textarea></div>
 <div class="field full"><label for="description">Room Description</label><textarea id="description" name="description"></textarea></div>
-<div class="field full"><label for="photos">Room Photos</label><input id="photos" name="photos" type="file" accept="image/*" multiple><div class="help">Photos are selected on this device only; they are not uploaded or saved yet.</div></div>
+<div class="field full"><label for="photos">Room Photos</label><input id="photos" name="photos" type="file" accept="image/*" multiple><div class="help">Photos are selected on this device only; their file names are sent with the registration.</div></div>
 </div>
-<div class="actions"><button class="btn alt" type="submit">Submit Room Details</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
+<div class="actions"><button id="submitButton" class="btn alt" type="submit">Submit Room Details</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
 </form>
 </section>
 </main>
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec';
+const form = document.getElementById('roomRentForm');
+const submitButton = document.getElementById('submitButton');
+const statusMessage = document.getElementById('statusMessage');
+let submissionInProgress = false;
+
+form.addEventListener('submit', async function(event) {
+  event.preventDefault();
+  if (submissionInProgress) return;
+
+  submissionInProgress = true;
+  submitButton.disabled = true;
+  submitButton.textContent = 'Submitting...';
+  statusMessage.textContent = 'Registration is being submitted. Please wait...';
+
+  try {
+    const data = new URLSearchParams();
+    data.append('ownerName', document.getElementById('ownerName').value.trim());
+    data.append('mobile', document.getElementById('mobile').value.trim());
+    data.append('whatsapp', document.getElementById('whatsapp').value.trim());
+    data.append('email', document.getElementById('email').value.trim());
+    data.append('state', document.getElementById('state').value.trim());
+    data.append('district', document.getElementById('district').value.trim());
+    data.append('city', document.getElementById('city').value.trim());
+    data.append('area', document.getElementById('area').value.trim());
+    data.append('roomType', document.getElementById('roomType').value);
+    data.append('monthlyRent', document.getElementById('rent').value.trim());
+
+    const availability = document.getElementById('availability').value;
+    const availableDate = document.getElementById('availableDate').value;
+    data.append('availableFrom', availableDate || availability);
+
+    data.append('facilities', document.getElementById('facilities').value.trim());
+    data.append('roomDescription', document.getElementById('description').value.trim());
+
+    const photoFiles = Array.from(document.getElementById('photos').files || []);
+    data.append('roomPhotos', photoFiles.map(file => file.name).join(', '));
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: data
+    });
+
+    if (!response.ok) {
+      throw new Error('Server returned HTTP ' + response.status);
+    }
+
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (_) {
+      result = null;
+    }
+
+    const roomId = result && (
+      result.roomId || result.roomID || result.room_id || result.id ||
+      result['Room ID'] || result['RoomID']
+    );
+
+    const successFlag = result && (
+      result.success === true || result.status === 'success' || result.result === 'success'
+    );
+
+    if (!roomId && !successFlag && !responseText.trim()) {
+      throw new Error('The server returned an empty response.');
+    }
+
+    let displayedRoomId = roomId;
+    if (!displayedRoomId && responseText) {
+      const match = responseText.match(/(?:Room\s*ID|RoomID)\s*[:#-]?\s*([A-Za-z0-9_-]+)/i);
+      if (match) displayedRoomId = match[1];
+    }
+
+    if (!displayedRoomId) {
+      displayedRoomId = 'Generated by server';
+    }
+
+    statusMessage.innerHTML =
+      '<strong>Registration Successful</strong><br>' +
+      'Room ID: <strong>' + escapeHtml(String(displayedRoomId)) + '</strong><br>' +
+      'Verification Status: <strong>Pending</strong><br>' +
+      'Availability Status: <strong>Pending</strong>';
+
+    form.reset();
+  } catch (error) {
+    statusMessage.textContent = 'Unable to submit the registration. Please check your internet connection and try again. Error: ' + error.message;
+  } finally {
+    submissionInProgress = false;
+    submitButton.disabled = false;
+    submitButton.textContent = 'Submit Room Details';
+  }
+});
+
+function escapeHtml(value) {
+  return value.replace(/[&<>'"]/g, function(char) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[char];
+  });
+}
+</script>
 </body>
 </html>
