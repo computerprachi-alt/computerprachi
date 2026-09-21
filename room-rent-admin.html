@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Computer Prachi Room Rent — Admin</title>
+<style>
+:root{--primary:#173b73;--accent:#ff7a00;--bg:#f4f7fb;--card:#fff;--text:#222;--muted:#666;--border:#d8dee8;--danger:#b42318;--success:#137333}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.header{background:var(--primary);color:#fff;padding:18px 16px;text-align:center}.header h1{margin:0;font-size:25px}.header p{margin:7px 0 0;font-size:14px;opacity:.9}
+.container{max-width:1400px;margin:25px auto;padding:0 16px}.card{background:var(--card);border-radius:10px;padding:22px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}.admin-email{font-size:14px;color:var(--muted)}
+.status{padding:12px 14px;border-radius:7px;background:#eef3f9;margin-bottom:18px;line-height:1.45}.status.success{background:#eaf6ed;color:var(--success)}.status.error{background:#fdecec;color:var(--danger)}
+.btn{border:0;border-radius:7px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--primary)}.btn.alt{background:var(--accent)}.btn.danger{background:#b42318}.btn.green{background:#137333}.btn:disabled{opacity:.55;cursor:not-allowed}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}.table{width:100%;border-collapse:collapse;min-width:1250px}.table th,.table td{padding:10px 9px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;font-size:13px}.table th{background:#f7f9fc;color:var(--primary);position:sticky;top:0;z-index:1}.table tr:last-child td{border-bottom:0}.actions{display:flex;gap:6px;flex-wrap:wrap;min-width:180px}.actions .btn{font-size:12px;padding:8px 9px}.empty{text-align:center;padding:28px;color:var(--muted);border:1px dashed var(--border);border-radius:8px}.hidden{display:none!important}.loading{opacity:.65;pointer-events:none}
+@media(max-width:700px){.container{margin:15px auto;padding:0 10px}.card{padding:15px}.header h1{font-size:21px}.toolbar{align-items:stretch}.toolbar .btn{width:100%}}
+</style>
+</head>
+<body>
+<header class="header">
+<h1>Computer Prachi Room Rent — Admin</h1>
+<p>Private administration dashboard</p>
+</header>
+<main class="container">
+<section id="adminCard" class="card hidden">
+<div class="toolbar">
+<div><strong>Room Registrations</strong><div id="adminEmail" class="admin-email"></div></div>
+<button id="refreshButton" class="btn" type="button">↻ Refresh</button>
+</div>
+<div id="status" class="status">Checking admin authentication...</div>
+<div id="roomContainer"></div>
+</section>
+<section id="authError" class="card">
+<div id="authErrorMessage" class="status error">Checking admin authentication...</div>
+</section>
+</main>
+<script>
+const ADMIN_API_URL = 'https://script.google.com/macros/s/AKfycbws--tjSuZncHk8yj0IB0I3M1apvHMNetCq0dOvMjusyy0gnkbGDMue7Mj77D5wJvSTvw/exec';
+const AUTHORIZED_ADMIN = 'computerprachi@gmail.com';
+const adminCard = document.getElementById('adminCard');
+const authError = document.getElementById('authError');
+const authErrorMessage = document.getElementById('authErrorMessage');
+const adminEmail = document.getElementById('adminEmail');
+const statusBox = document.getElementById('status');
+const roomContainer = document.getElementById('roomContainer');
+const refreshButton = document.getElementById('refreshButton');
+let authenticated = false;
+let actionInProgress = false;
+
+function escapeHtml(value){return String(value ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function valueOf(obj,names){for(const n of names){if(obj && obj[n]!==undefined && obj[n]!==null && String(obj[n]).trim()!=='')return obj[n];}return '';}
+function setStatus(message,type=''){statusBox.textContent=message;statusBox.className='status'+(type?' '+type:'');}
+function setAuthFailure(message){authenticated=false;adminCard.classList.add('hidden');authError.classList.remove('hidden');authErrorMessage.textContent=message;}
+
+async function getJson(url,options={}){
+  const response=await fetch(url,{...options,credentials:'include',cache:'no-store'});
+  if(!response.ok)throw new Error('Server returned HTTP '+response.status);
+  const text=await response.text();
+  if(!text.trim())throw new Error('The Admin Web App returned an empty response.');
+  try{return JSON.parse(text);}catch(_){throw new Error('The Admin Web App returned invalid JSON.');}
+}
+
+function extractAuthorizedEmail(data){return valueOf(data,['email','adminEmail','userEmail','authenticatedEmail','account','user']);}
+function isAuthorizedResponse(data){
+  const email=extractAuthorizedEmail(data);
+  const authorized=data && (data.authorized===true || data.isAuthorized===true || data.authenticated===true || data.success===true);
+  return normalise(email)===AUTHORIZED_ADMIN && (authorized || email);
+}
+function normalise(value){return String(value||'').trim().toLowerCase();}
+
+async function authenticate(){
+  try{
+    const data=await getJson(ADMIN_API_URL+'?action=admin_info');
+    if(!isAuthorizedResponse(data)){
+      setAuthFailure('Unauthorized admin access.');
+      return false;
+    }
+    authenticated=true;
+    const email=extractAuthorizedEmail(data) || AUTHORIZED_ADMIN;
+    adminEmail.textContent='Logged in as: '+email;
+    authError.classList.add('hidden');
+    adminCard.classList.remove('hidden');
+    setStatus('Admin authentication successful. Loading room registrations...');
+    await loadRooms();
+    return true;
+  }catch(error){
+    setAuthFailure('Unable to verify admin access. '+error.message);
+    return false;
+  }
+}
+
+function roomListFromResponse(data){
+  if(Array.isArray(data))return data;
+  if(data && Array.isArray(data.rooms))return data.rooms;
+  if(data && Array.isArray(data.data))return data.data;
+  if(data && Array.isArray(data.results))return data.results;
+  return null;
+}
+
+function renderRooms(rooms){
+  if(!rooms.length){roomContainer.innerHTML='<div class="empty">No room registrations are currently pending or available in the Admin Web App.</div>';setStatus('Room list loaded. No rooms were returned.','success');return;}
+  const rows=rooms.map(room=>{
+    const id=valueOf(room,['roomId','roomID','room_id','Room ID','RoomID']);
+    return `<tr>
+      <td><strong>${escapeHtml(id||'—')}</strong></td>
+      <td>${escapeHtml(valueOf(room,['dateTime','Date/Time','timestamp','Timestamp'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['ownerName','Owner Name'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['mobile','Mobile'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['whatsapp','WhatsApp'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['email','Email'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['state','State'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['district','District'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['city','City'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['area','Area','locality','Locality','Area / Locality'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['roomType','Room Type'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['monthlyRent','Monthly Rent','rent'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['availableFrom','Available From'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['facilities','Facilities'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['roomDescription','Room Description','description'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['verificationStatus','Verification Status','verification_status'])||'—')}</td>
+      <td>${escapeHtml(valueOf(room,['availabilityStatus','Availability Status','availability_status'])||'—')}</td>
+      <td><div class="actions">
+        <button class="btn green action-button" data-action="approve_room" data-room-id="${escapeHtml(id)}">Approve</button>
+        <button class="btn danger action-button" data-action="reject_room" data-room-id="${escapeHtml(id)}">Reject</button>
+        <button class="btn action-button" data-action="mark_vacant" data-room-id="${escapeHtml(id)}">Mark Vacant</button>
+        <button class="btn alt action-button" data-action="mark_occupied" data-room-id="${escapeHtml(id)}">Mark Occupied</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  roomContainer.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr>
+    <th>Room ID</th><th>Date/Time</th><th>Owner Name</th><th>Mobile</th><th>WhatsApp</th><th>Email</th><th>State</th><th>District</th><th>City</th><th>Area/Locality</th><th>Room Type</th><th>Monthly Rent</th><th>Available From</th><th>Facilities</th><th>Room Description</th><th>Verification Status</th><th>Availability Status</th><th>Actions</th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
+  document.querySelectorAll('.action-button').forEach(button=>button.addEventListener('click',()=>runAction(button.dataset.action,button.dataset.roomId,button)));
+  setStatus(rooms.length+' room registration'+(rooms.length===1?'':'s')+' loaded.','success');
+}
+
+async function loadRooms(){
+  if(!authenticated)return;
+  refreshButton.disabled=true;
+  refreshButton.textContent='Loading...';
+  setStatus('Loading room registrations...');
+  try{
+    const data=await getJson(ADMIN_API_URL+'?action=get_pending_rooms');
+    if(data && (data.authorized===false || data.isAuthorized===false)){setAuthFailure('Unauthorized admin access.');return;}
+    const rooms=roomListFromResponse(data);
+    if(!rooms)throw new Error('The Admin Web App returned an unexpected room-list format.');
+    renderRooms(rooms);
+  }catch(error){setStatus('Unable to load room registrations. '+error.message,'error');roomContainer.innerHTML='<div class="empty">Room data could not be loaded.</div>';}finally{refreshButton.disabled=false;refreshButton.textContent='↻ Refresh';}
+}
+
+async function runAction(action,roomId,button){
+  if(!authenticated || actionInProgress || !roomId)return;
+  actionInProgress=true;
+  document.querySelectorAll('.action-button').forEach(b=>b.disabled=true);
+  button.textContent='Processing...';
+  setStatus('Processing '+action.replaceAll('_',' ')+' for Room ID '+roomId+'...');
+  try{
+    const body=new URLSearchParams();body.append('action',action);body.append('roomId',roomId);
+    const data=await getJson(ADMIN_API_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body});
+    if(data && (data.authorized===false || data.isAuthorized===false)){setAuthFailure('Unauthorized admin access.');return;}
+    const failed=data && (data.success===false || data.status==='error' || data.error);
+    if(failed)throw new Error(data.message || data.error || 'The status update failed.');
+    setStatus('Action completed successfully. Refreshing room list...','success');
+    await loadRooms();
+  }catch(error){setStatus('Status update failed. '+error.message,'error');}
+  finally{actionInProgress=false;document.querySelectorAll('.action-button').forEach(b=>b.disabled=false);}
+}
+
+refreshButton.addEventListener('click',()=>{if(!actionInProgress)loadRooms();});
+authenticate();
+</script>
+</body>
+</html>
