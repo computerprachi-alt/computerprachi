@@ -13,8 +13,7 @@
 .notice{background:#fff4e8;border-left:4px solid var(--accent);padding:12px 14px;margin:18px 0;line-height:1.5}
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.field{display:flex;flex-direction:column}.field.full{grid-column:1/-1}
 label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:7px;font:inherit;background:#fff}
-.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;cursor:pointer}
-.btn.alt{background:var(--accent)}.btn:disabled{opacity:.65;cursor:not-allowed}.empty{margin-top:24px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;color:var(--muted);line-height:1.5}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;cursor:pointer}.btn.alt{background:var(--accent)}.btn:disabled{opacity:.65;cursor:not-allowed}.empty{margin-top:24px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;color:var(--muted);line-height:1.5}
 .results{margin-top:24px;display:grid;gap:16px}.room-card{border:1px solid var(--border);border-radius:9px;padding:18px;background:#fff}.room-card h3{margin:0 0 12px;color:var(--primary)}.room-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px}.room-item strong{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}.room-photos{margin-top:14px}.room-photos img{max-width:140px;max-height:110px;object-fit:cover;border-radius:6px;margin:4px}.error{margin-top:24px;padding:15px;border-left:4px solid #c62828;background:#fdecec;line-height:1.5}
 @media(max-width:650px){.header h1{font-size:21px}.form-grid,.room-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
 </style>
@@ -38,7 +37,7 @@ label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12p
 </section>
 </main>
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec?action=approved_rooms';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec';
 const form = document.getElementById('roomSearchForm');
 const searchButton = document.getElementById('searchButton');
 const statusMessage = document.getElementById('statusMessage');
@@ -57,12 +56,12 @@ function getValue(room, names) {
 }
 
 function normalise(value) {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
 }
 
 function isApprovedVacant(room) {
-  const verification = getValue(room, ['verificationStatus','Verification Status','verification_status']);
-  const availability = getValue(room, ['availabilityStatus','Availability Status','availability_status']);
+  const verification = getValue(room, ['verificationStatus','Verification Status','verification_status','verification','Verification']);
+  const availability = getValue(room, ['availabilityStatus','Availability Status','availability_status','availability','Availability']);
   return normalise(verification) === 'approved' && normalise(availability) === 'vacant';
 }
 
@@ -82,17 +81,17 @@ function renderRooms(list) {
 
   statusMessage.textContent = list.length + ' verified vacant room' + (list.length === 1 ? '' : 's') + ' found.';
   list.forEach(room => {
-    const roomId = getValue(room, ['roomId','roomID','room_id','Room ID','RoomID']);
+    const roomId = getValue(room, ['roomId','roomID','room_id','Room ID','RoomID','room id']);
     const state = getValue(room, ['state','State']);
     const district = getValue(room, ['district','District']);
     const city = getValue(room, ['city','City']);
     const area = getValue(room, ['area','Area','locality','Locality','Area / Locality']);
-    const roomType = getValue(room, ['roomType','Room Type']);
-    const monthlyRent = getValue(room, ['monthlyRent','Monthly Rent','rent']);
-    const availableFrom = getValue(room, ['availableFrom','Available From']);
+    const roomType = getValue(room, ['roomType','Room Type','room_type']);
+    const monthlyRent = getValue(room, ['monthlyRent','Monthly Rent','rent','Rent']);
+    const availableFrom = getValue(room, ['availableFrom','Available From','available_from']);
     const facilities = getValue(room, ['facilities','Facilities']);
-    const description = getValue(room, ['roomDescription','Room Description','description']);
-    const photos = getPhotoUrls(getValue(room, ['roomPhotos','Room Photos','photos']));
+    const description = getValue(room, ['roomDescription','Room Description','description','Description']);
+    const photos = getPhotoUrls(getValue(room, ['roomPhotos','Room Photos','photos','Photos']));
 
     const card = document.createElement('article');
     card.className = 'room-card';
@@ -124,7 +123,7 @@ function applyFilters() {
     const city = normalise(getValue(room, ['city','City']));
     const district = normalise(getValue(room, ['district','District']));
     const roomArea = normalise(getValue(room, ['area','Area','locality','Locality','Area / Locality']));
-    const roomType = normalise(getValue(room, ['roomType','Room Type']));
+    const roomType = normalise(getValue(room, ['roomType','Room Type','room_type']));
     return (!location || city.includes(location) || district.includes(location)) &&
            (!area || roomArea.includes(area)) &&
            (!type || roomType === type);
@@ -138,14 +137,19 @@ async function loadRooms() {
   statusMessage.textContent = 'Verified vacant rooms are being loaded...';
   results.innerHTML = '';
   try {
-    const response = await fetch(API_URL, {method:'GET', cache:'no-store'});
+    const response = await fetch(API_URL + '?action=approved_rooms', {method:'GET', cache:'no-store'});
     if (!response.ok) throw new Error('Server returned HTTP ' + response.status);
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); } catch (_) { throw new Error('The room API returned an invalid response.'); }
 
-    const list = Array.isArray(data) ? data : (data.rooms || data.data || data.results || []);
-    if (!Array.isArray(list)) throw new Error('The room API returned an unexpected data format.');
+    const list = Array.isArray(data)
+      ? data
+      : (Array.isArray(data.rooms) ? data.rooms
+      : Array.isArray(data.data) ? data.data
+      : Array.isArray(data.results) ? data.results
+      : Array.isArray(data.approved_rooms) ? data.approved_rooms
+      : []);
     rooms = list.filter(isApprovedVacant);
     renderRooms(rooms);
   } catch (error) {
