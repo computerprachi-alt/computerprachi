@@ -14,8 +14,9 @@
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.field{display:flex;flex-direction:column}.field.full{grid-column:1/-1}
 label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:7px;font:inherit;background:#fff}
 .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;cursor:pointer}
-.btn.alt{background:var(--accent)}.empty{margin-top:24px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;color:var(--muted);line-height:1.5}
-@media(max-width:650px){.header h1{font-size:21px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
+.btn.alt{background:var(--accent)}.btn:disabled{opacity:.65;cursor:not-allowed}.empty{margin-top:24px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;color:var(--muted);line-height:1.5}
+.results{margin-top:24px;display:grid;gap:16px}.room-card{border:1px solid var(--border);border-radius:9px;padding:18px;background:#fff}.room-card h3{margin:0 0 12px;color:var(--primary)}.room-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px}.room-item strong{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}.room-photos{margin-top:14px}.room-photos img{max-width:140px;max-height:110px;object-fit:cover;border-radius:6px;margin:4px}.error{margin-top:24px;padding:15px;border-left:4px solid #c62828;background:#fdecec;line-height:1.5}
+@media(max-width:650px){.header h1{font-size:21px}.form-grid,.room-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
 </style>
 </head>
 <body>
@@ -23,19 +24,145 @@ label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12p
 <main class="container">
 <section class="card">
 <h2>Find Room in Bhagalpur</h2>
-<p class="intro">Use the filters below to search for available rooms. Listings will appear here after the room data system is added.</p>
-<div class="notice">अभी कोई room listing उपलब्ध नहीं है। Real room listings/data बाद में जोड़ने के बाद यहाँ दिखाई जाएँगी।</div>
-<form onsubmit="return false;">
+<p class="intro">Use the filters below to search verified vacant room listings.</p>
+<div class="notice" id="statusMessage">Verified vacant rooms are being loaded...</div>
+<form id="roomSearchForm">
 <div class="form-grid">
+<div class="field"><label for="locationSearch">City / District</label><input id="locationSearch" name="locationSearch" type="text" placeholder="Enter city or district"></div>
 <div class="field"><label for="area">Area / Locality</label><input id="area" name="area" type="text" placeholder="Enter area or locality"></div>
 <div class="field"><label for="roomType">Room Type</label><select id="roomType" name="roomType"><option value="">All Room Types</option><option>Single Room</option><option>1 RK</option><option>1 BHK</option><option>2 BHK</option><option>PG / Paying Guest</option><option>Hostel</option><option>Other</option></select></div>
-<div class="field"><label for="rent">Monthly Rent</label><input id="rent" name="rent" type="number" min="0" placeholder="Maximum monthly rent"></div>
-<div class="field"><label for="availability">Availability</label><select id="availability" name="availability"><option value="">Any Availability</option><option>Vacant</option><option>Available From Date</option></select></div>
 </div>
-<div class="actions"><button class="btn alt" type="submit">🔎 Search Room</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
+<div class="actions"><button id="searchButton" class="btn alt" type="submit">🔎 Search Room</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
 </form>
-<div class="empty"><strong>No room listings yet</strong><br>Room search/data functionality will be connected later. No fake owner or room data is shown.</div>
+<div id="results" class="results"></div>
 </section>
 </main>
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbzm-Qpgcg0BdIjTQB3bjhBWnA_R3P0w1DXH-pDI6fUKo5jtn8mNjGpv8PKcluX8ov7yow/exec?action=approved_rooms';
+const form = document.getElementById('roomSearchForm');
+const searchButton = document.getElementById('searchButton');
+const statusMessage = document.getElementById('statusMessage');
+const results = document.getElementById('results');
+let rooms = [];
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+}
+
+function getValue(room, names) {
+  for (const name of names) {
+    if (room && room[name] !== undefined && room[name] !== null && String(room[name]).trim() !== '') return room[name];
+  }
+  return '';
+}
+
+function normalise(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isApprovedVacant(room) {
+  const verification = getValue(room, ['verificationStatus','Verification Status','verification_status']);
+  const availability = getValue(room, ['availabilityStatus','Availability Status','availability_status']);
+  return normalise(verification) === 'approved' && normalise(availability) === 'vacant';
+}
+
+function getPhotoUrls(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  return String(value).split(/\s*,\s*|\s*\n\s*/).map(item => item.trim()).filter(Boolean);
+}
+
+function renderRooms(list) {
+  results.innerHTML = '';
+  if (!list.length) {
+    statusMessage.textContent = 'अभी कोई verified vacant room उपलब्ध नहीं है।';
+    results.innerHTML = '<div class="empty"><strong>अभी कोई verified vacant room उपलब्ध नहीं है।</strong></div>';
+    return;
+  }
+
+  statusMessage.textContent = list.length + ' verified vacant room' + (list.length === 1 ? '' : 's') + ' found.';
+  list.forEach(room => {
+    const roomId = getValue(room, ['roomId','roomID','room_id','Room ID','RoomID']);
+    const state = getValue(room, ['state','State']);
+    const district = getValue(room, ['district','District']);
+    const city = getValue(room, ['city','City']);
+    const area = getValue(room, ['area','Area','locality','Locality','Area / Locality']);
+    const roomType = getValue(room, ['roomType','Room Type']);
+    const monthlyRent = getValue(room, ['monthlyRent','Monthly Rent','rent']);
+    const availableFrom = getValue(room, ['availableFrom','Available From']);
+    const facilities = getValue(room, ['facilities','Facilities']);
+    const description = getValue(room, ['roomDescription','Room Description','description']);
+    const photos = getPhotoUrls(getValue(room, ['roomPhotos','Room Photos','photos']));
+
+    const card = document.createElement('article');
+    card.className = 'room-card';
+    card.innerHTML = `
+      <h3>Room ID: ${escapeHtml(roomId || 'Not available')}</h3>
+      <div class="room-grid">
+        <div class="room-item"><strong>State</strong>${escapeHtml(state || '—')}</div>
+        <div class="room-item"><strong>District</strong>${escapeHtml(district || '—')}</div>
+        <div class="room-item"><strong>City</strong>${escapeHtml(city || '—')}</div>
+        <div class="room-item"><strong>Area / Locality</strong>${escapeHtml(area || '—')}</div>
+        <div class="room-item"><strong>Room Type</strong>${escapeHtml(roomType || '—')}</div>
+        <div class="room-item"><strong>Monthly Rent</strong>${escapeHtml(monthlyRent || '—')}</div>
+        <div class="room-item"><strong>Available From</strong>${escapeHtml(availableFrom || '—')}</div>
+        <div class="room-item"><strong>Facilities</strong>${escapeHtml(facilities || '—')}</div>
+      </div>
+      <div class="room-item" style="margin-top:12px"><strong>Room Description</strong>${escapeHtml(description || '—')}</div>
+      ${photos.length ? `<div class="room-photos"><strong>Room Photos</strong><br>${photos.map(url => `<img src="${escapeHtml(url)}" alt="Room photo" loading="lazy" onerror="this.style.display='none'">`).join('')}</div>` : ''}
+    `;
+    results.appendChild(card);
+  });
+}
+
+function applyFilters() {
+  const location = normalise(document.getElementById('locationSearch').value);
+  const area = normalise(document.getElementById('area').value);
+  const type = normalise(document.getElementById('roomType').value);
+
+  const filtered = rooms.filter(room => {
+    const city = normalise(getValue(room, ['city','City']));
+    const district = normalise(getValue(room, ['district','District']));
+    const roomArea = normalise(getValue(room, ['area','Area','locality','Locality','Area / Locality']));
+    const roomType = normalise(getValue(room, ['roomType','Room Type']));
+    return (!location || city.includes(location) || district.includes(location)) &&
+           (!area || roomArea.includes(area)) &&
+           (!type || roomType === type);
+  });
+  renderRooms(filtered);
+}
+
+async function loadRooms() {
+  searchButton.disabled = true;
+  searchButton.textContent = 'Loading...';
+  statusMessage.textContent = 'Verified vacant rooms are being loaded...';
+  results.innerHTML = '';
+  try {
+    const response = await fetch(API_URL, {method:'GET', cache:'no-store'});
+    if (!response.ok) throw new Error('Server returned HTTP ' + response.status);
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch (_) { throw new Error('The room API returned an invalid response.'); }
+
+    const list = Array.isArray(data) ? data : (data.rooms || data.data || data.results || []);
+    if (!Array.isArray(list)) throw new Error('The room API returned an unexpected data format.');
+    rooms = list.filter(isApprovedVacant);
+    renderRooms(rooms);
+  } catch (error) {
+    statusMessage.textContent = 'Room listings could not be loaded.';
+    results.innerHTML = '<div class="error"><strong>Unable to load room listings.</strong><br>Please check your internet connection and try again. Error: ' + escapeHtml(error.message) + '</div>';
+  } finally {
+    searchButton.disabled = false;
+    searchButton.textContent = '🔎 Search Room';
+  }
+}
+
+form.addEventListener('submit', function(event) {
+  event.preventDefault();
+  applyFilters();
+});
+
+loadRooms();
+</script>
 </body>
 </html>
