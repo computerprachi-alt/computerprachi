@@ -22,6 +22,7 @@ label{font-weight:700;margin-bottom:7px}input,select{width:100%;padding:11px 12p
 <header class="header"><h1>🔎 Find Room</h1></header>
 <main class="container">
 <section class="card">
+<a class="btn" href="index.html">🏠 Home</a>
 <h2>Find Room in Bhagalpur</h2>
 <p class="intro">Search verified vacant room listings by owner, location, room type, rent, or contact information.</p>
 <div class="notice" id="statusMessage">Enter a keyword and click Search Room.</div>
@@ -44,7 +45,7 @@ let rooms = [];
 let apiLoaded = false;
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+  return String(value ?? '').replace(/[&<>'\"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 }
 function normalise(value) { return String(value ?? '').trim().toLowerCase().replace(/\s+/g,' '); }
 function compact(value) { return String(value ?? '').toLowerCase().replace(/\s+/g,''); }
