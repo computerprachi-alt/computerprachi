@@ -21,6 +21,7 @@
 @media(max-width:650px){.bio-format-grid{grid-template-columns:1fr 1fr}.job-bio-photo-row,.job-bio-grid{grid-template-columns:1fr}.job-bio-photo-box{max-width:220px}.job-bio-preview{padding:22px 16px;min-height:auto}.job-bio-preview .bio-header{grid-template-columns:1fr 90px}.job-bio-preview .bio-photo{width:82px;height:105px}.job-bio-preview .bio-title{font-size:19px}.job-bio-preview .bio-bottom{flex-direction:column}.job-bio-preview .bio-sign{align-self:flex-end}.job-bio-actions{flex-direction:column}.job-bio-actions .btn{width:100%;margin:2px 0}}
 @media print{body{background:#fff}.wrap>.top,.wrap>.head,.wrap>.nav,.wrap>.box,#marriage-biodata>h3,#marriage-biodata>.bio-format-picker,#marriage-biodata>.job-bio-form,#marriage-biodata>.job-bio-actions,#marriage-biodata>.job-bio-note{display:none!important}.panel{display:block!important;margin:0;border:0;padding:0}.job-bio-preview{display:block!important;border:0;margin:0;padding:0;max-width:none;min-height:0}.job-bio-preview .bio-section h4{break-after:avoid}.job-bio-preview .bio-edu{break-inside:auto}.job-bio-preview .bio-section{break-inside:auto}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style id="cp-live-clock-style">
 .cp-live-clock{position:absolute;right:145px;top:6px;z-index:9999;display:flex;align-items:center;gap:5px;font:600 11px/1.1 Arial,sans-serif;color:#fff;white-space:nowrap}.cp-live-clock .cp-time{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.24);border-radius:13px;padding:4px 8px}.cp-live-clock .cp-date{opacity:.9}@media(max-width:900px){.cp-live-clock{right:118px;font-size:10px}.cp-live-clock .cp-date{display:none}}@media(max-width:700px){.cp-live-clock{right:8px;top:4px}.cp-live-clock .cp-date{display:none}.cp-live-clock .cp-time{padding:4px 7px}}
@@ -173,32 +174,66 @@ function makeResume(){$('cvPreview').innerHTML='<h2>'+esc($('cvName').value)+'</
 async function downloadBioPDF(){
   if(!selectedBioFormat){alert("Please choose a biodata format first.");return;}
   const el=$('bioPreview');
-  if(!el||!el.innerHTML.trim()){alert("Please create the biodata first.");return;}
-  if(!window.jspdf||!window.jspdf.jsPDF){alert("PDF library could not load. Please refresh and try again.");return;}
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
-  const pageWidth=210,pageHeight=297,margin=10;
-  const clone=el.cloneNode(true);
-  clone.style.cssText='position:fixed;left:-10000px;top:0;width:794px;max-width:none;min-height:1123px;margin:0;padding:34px 38px;border:0;background:#fff;display:block;visibility:visible;';
-  clone.className='job-bio-preview bio-template-'+selectedBioFormat;
-  document.body.appendChild(clone);
+  if(!el||!el.innerHTML.trim()){alert("Please click Create Biodata first.");return;}
+  const name=bioVal('bioName')||'Biodata';
+  const safeName=name.replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,80)||'Biodata';
+  const button=document.querySelector('#marriage-biodata .job-bio-actions .btn.blue');
+  const originalText=button?button.textContent:'Download PDF';
+  if(button){button.disabled=true;button.textContent='Generating PDF...';}
+  let clone=null;
   try{
+    if(!window.html2canvas)throw new Error('PDF renderer did not load. Please refresh the page and try again.');
+    if(!window.jspdf||!window.jspdf.jsPDF)throw new Error('PDF library did not load. Please refresh the page and try again.');
+    clone=el.cloneNode(true);
+    clone.className='job-bio-preview bio-template-'+selectedBioFormat;
+    clone.style.cssText='position:absolute;left:-100000px;top:0;width:794px;max-width:none;min-height:0;margin:0;padding:34px 38px;background:#fff;border:0;display:block;visibility:visible;box-shadow:none;';
+    clone.querySelectorAll('button,input,textarea,select').forEach(x=>x.remove());
+    document.body.appendChild(clone);
     const imgs=[...clone.querySelectorAll('img')];
     await Promise.all(imgs.map(img=>new Promise(resolve=>{
-      if(img.complete){resolve();return;}
+      if(img.complete&&img.naturalWidth){resolve();return;}
       img.onload=img.onerror=()=>resolve();
     })));
-    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    await pdf.html(clone,{
-      x:margin,y:margin,width:pageWidth-(margin*2),windowWidth:794,
-      autoPaging:'text',html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false},
-      callback:function(doc){doc.save('Computer-Prachi-Biodata.pdf');}
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const canvas=await html2canvas(clone,{
+      scale:2,
+      useCORS:true,
+      allowTaint:false,
+      backgroundColor:'#ffffff',
+      imageTimeout:15000,
+      logging:false,
+      windowWidth:794,
+      scrollX:0,
+      scrollY:0
     });
+    if(!canvas.width||!canvas.height)throw new Error('The biodata preview could not be rendered.');
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+    const margin=10,pageW=210,pageH=297;
+    const contentW=pageW-margin*2,contentH=pageH-margin*2;
+    const pxPerPage=canvas.width*(contentH/contentW);
+    let offsetY=0,page=0;
+    while(offsetY<canvas.height){
+      const sliceH=Math.min(pxPerPage,canvas.height-offsetY);
+      const slice=document.createElement('canvas');
+      slice.width=canvas.width;
+      slice.height=Math.ceil(sliceH);
+      const ctx=slice.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,slice.width,slice.height);
+      ctx.drawImage(canvas,0,offsetY,canvas.width,sliceH,0,0,canvas.width,sliceH);
+      const img=slice.toDataURL('image/jpeg',0.95);
+      const h=(sliceH/canvas.width)*contentW;
+      if(page>0)pdf.addPage();
+      pdf.addImage(img,'JPEG',margin,margin,contentW,h,'BIODATA'+page,'FAST');
+      offsetY+=sliceH;page++;
+    }
+    pdf.save('Computer-Prachi-Biodata-'+safeName+'.pdf');
   }catch(err){
-    console.error(err);
-    alert("PDF generation failed. Please try again.");
+    console.error('Bio Data PDF generation error:',err);
+    alert('PDF generation failed: '+(err&&err.message?err.message:'Unknown error')+'\nPlease refresh the page and try again.');
   }finally{
-    clone.remove();
+    if(clone)clone.remove();
+    if(button){button.disabled=false;button.textContent=originalText;}
   }
 }
 function printArea(id){const el=$(id);if(!el||!el.innerHTML.trim())return alert("Please create the biodata first.");const w=window.open('','_blank','width=900,height=700');if(!w){alert('Please allow pop-ups to print/save PDF.');return}w.document.open();w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Computer Prachi</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;line-height:1.45;color:#222;margin:0}h2{color:#08256b;text-align:center}h3{border-bottom:1px solid #ccc;padding-bottom:5px}button,a{display:none!important}.job-bio-preview{border:0!important;margin:0!important;padding:0!important;max-width:none!important;min-height:0!important}.bio-section{break-inside:auto}.bio-edu{break-inside:auto}</style></head><body>');w.document.write(el.innerHTML);w.document.write('</body></html>');w.document.close();w.focus();setTimeout(function(){w.print()},400)}
