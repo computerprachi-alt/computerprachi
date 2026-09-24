@@ -93,7 +93,7 @@
 <h4 class="job-bio-section-title">References (Optional)</h4><div class="field"><textarea id="bioReferences" rows="3"></textarea></div>
 <h4 class="job-bio-section-title">Declaration</h4><div class="field"><textarea id="bioDeclaration" rows="4" placeholder="I hereby declare that the information provided above is true and correct to the best of my knowledge."></textarea></div>
 <div class="job-bio-grid"><div class="field"><label>Place</label><input id="bioPlace"></div><div class="field"><label>Date</label><input id="bioDate" type="date"></div></div>
-<div class="job-bio-actions"><button class="btn" onclick="makeBio()">Create Biodata</button><button class="btn blue" onclick="printArea('bioPreview')">Print / Save as PDF</button><button class="btn gray" type="button" onclick="changeBioFormat()">Change Format</button></div>
+<div class="job-bio-actions"><button class="btn" onclick="makeBio()">Create Biodata</button><button class="btn blue" type="button" onclick="downloadBioPDF()">Download PDF</button><button class="btn gray" type="button" onclick="changeBioFormat()">Change Format</button></div>
 <p class="job-bio-note">Only information entered by you is used. Empty fields are left blank or omitted from the generated biodata.</p>
 </div>
 <div id="bioPreview" class="job-bio-preview"></div></section>
@@ -170,6 +170,37 @@ function makeBio(){
 }
 $('bioPhoto').addEventListener('change',async function(){const f=this.files[0],img=$('bioPhotoPreview');if(!f){img.style.display='none';img.removeAttribute('src');return}try{const src=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});img.src=src;img.style.display='block'}catch(e){img.style.display='none'}});
 function makeResume(){$('cvPreview').innerHTML='<h2>'+esc($('cvName').value)+'</h2><p style="text-align:center">'+esc($('cvContact').value)+'</p><hr><h3>Career Objective</h3><p>'+esc($('cvObjective').value).replace(/\n/g,'<br>')+'</p><h3>Education</h3><p>'+esc($('cvEducation').value).replace(/\n/g,'<br>')+'</p><h3>Skills</h3><p>'+esc($('cvSkills').value).replace(/\n/g,'<br>')+'</p><h3>Experience</h3><p>'+esc($('cvExperience').value).replace(/\n/g,'<br>')+'</p>'}
+async function downloadBioPDF(){
+  if(!selectedBioFormat){alert("Please choose a biodata format first.");return;}
+  const el=$('bioPreview');
+  if(!el||!el.innerHTML.trim()){alert("Please create the biodata first.");return;}
+  if(!window.jspdf||!window.jspdf.jsPDF){alert("PDF library could not load. Please refresh and try again.");return;}
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+  const pageWidth=210,pageHeight=297,margin=10;
+  const clone=el.cloneNode(true);
+  clone.style.cssText='position:fixed;left:-10000px;top:0;width:794px;max-width:none;min-height:1123px;margin:0;padding:34px 38px;border:0;background:#fff;display:block;visibility:visible;';
+  clone.className='job-bio-preview bio-template-'+selectedBioFormat;
+  document.body.appendChild(clone);
+  try{
+    const imgs=[...clone.querySelectorAll('img')];
+    await Promise.all(imgs.map(img=>new Promise(resolve=>{
+      if(img.complete){resolve();return;}
+      img.onload=img.onerror=()=>resolve();
+    })));
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    await pdf.html(clone,{
+      x:margin,y:margin,width:pageWidth-(margin*2),windowWidth:794,
+      autoPaging:'text',html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false},
+      callback:function(doc){doc.save('Computer-Prachi-Biodata.pdf');}
+    });
+  }catch(err){
+    console.error(err);
+    alert("PDF generation failed. Please try again.");
+  }finally{
+    clone.remove();
+  }
+}
 function printArea(id){const el=$(id);if(!el||!el.innerHTML.trim())return alert("Please create the biodata first.");const w=window.open('','_blank','width=900,height=700');if(!w){alert('Please allow pop-ups to print/save PDF.');return}w.document.open();w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Computer Prachi</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;line-height:1.45;color:#222;margin:0}h2{color:#08256b;text-align:center}h3{border-bottom:1px solid #ccc;padding-bottom:5px}button,a{display:none!important}.job-bio-preview{border:0!important;margin:0!important;padding:0!important;max-width:none!important;min-height:0!important}.bio-section{break-inside:auto}.bio-edu{break-inside:auto}</style></head><body>');w.document.write(el.innerHTML);w.document.write('</body></html>');w.document.close();w.focus();setTimeout(function(){w.print()},400)}
 async function jpgToPdf(){const fs=[...$('pdfFiles').files];if(!fs.length)return $('pdfMsg').textContent='Please select JPG/PNG images.';if(!window.jspdf)return $('pdfMsg').textContent='PDF library could not load. Please refresh and try again.';const {jsPDF}=window.jspdf;let doc=null;for(const f of fs){const img=await loadImage(f);const ratio=img.width/img.height;let pw=190,ph=pw/ratio;if(ph>270){ph=270;pw=ph*ratio}if(!doc)doc=new jsPDF('p','mm','a4');else doc.addPage();doc.addImage(img,'JPEG',(210-pw)/2,(297-ph)/2,pw,ph)}doc.save('computer-prachi-images.pdf');$('pdfMsg').textContent='PDF downloaded successfully.'}
 let typingSeconds=60,typingRunning=false,typingInterval;function startTyping(){if(typingRunning)return;typingRunning=true;$('typingInput').disabled=false;$('typingInput').value='';$('typingInput').focus();typingSeconds=60;$('typingTimer').textContent=typingSeconds;$('typingResult').textContent='';typingInterval=setInterval(()=>{typingSeconds--; $('typingTimer').textContent=typingSeconds;if(typingSeconds<=0)finishTyping()},1000)}function finishTyping(){clearInterval(typingInterval);typingRunning=false;$('typingInput').disabled=true;const target=$('typingText').textContent.trim(),typed=$('typingInput').value.trim();let correct=0;for(let i=0;i<Math.min(target.length,typed.length);i++)if(target[i]===typed[i])correct++;const words=typed?typed.split(/\s+/).length:0;const mins=(60-typingSeconds)/60||1;$('typingResult').textContent='WPM: '+Math.round(words/mins)+' | Accuracy: '+Math.round(correct/Math.max(typed.length,1)*100)+'%'}
