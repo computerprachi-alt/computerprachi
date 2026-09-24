@@ -60,6 +60,8 @@
 </div></div>
 <div id="bioSelectedBar" class="job-bio-selected">Selected format: <span id="bioSelectedName"></span> <button type="button" class="btn blue" style="float:right;margin:-4px 0 0 8px" onclick="changeBioFormat()">Change Format</button></div>
 <div class="job-bio-form" id="bioForm" style="display:none">
+<div class="field bio-heading-selector"><label>Document Type / Heading</label><select id="bioDocumentType" onchange="updateBioDocumentHeading()"><option value="Biodata">Biodata</option><option value="CV">CV</option><option value="Resume">Resume</option></select><small>Select the heading for this document. Your existing details and selected template remain unchanged.</small></div>
+
 <div class="job-bio-photo-row">
 <div>
 <div class="job-bio-grid">
@@ -125,6 +127,10 @@ function bioVal(id){const el=$(id);return el?el.value.trim():''}
 function bioVal(id){const el=$(id);return el?el.value.trim():''}
 const bioFormats={1:'Classic Clean',2:'Modern Blue',3:'Simple Black & White',4:'Professional Two-Column',5:'Creative Clean'};
 let selectedBioFormat=0;
+function updateBioDocumentHeading(){
+  const preview=$('bioPreview');
+  if(preview&&preview.style.display!=='none'&&preview.innerHTML.trim())makeBio();
+}
 function selectBioFormat(n){
   if(!bioFormats[n])return;
   selectedBioFormat=n;
@@ -147,6 +153,7 @@ function bioSection(title,html){return html?'<div class="bio-section"><h4>'+esc(
 function makeBio(){
   if(!selectedBioFormat){alert("Please choose a biodata format first.");return;}
   const photo=$('bioPhotoPreview');
+  const documentType=$('bioDocumentType')?$('bioDocumentType').value:'Biodata';
   const name=bioVal('bioName'),dob=bioVal('bioDob'),gender=bioVal('bioGender'),father=bioVal('bioFather'),nationality=bioVal('bioNationality'),marital=bioVal('bioMarital'),languages=bioVal('bioLanguages'),mobile=bioVal('bioMobile'),email=bioVal('bioEmail'),current=bioVal('bioCurrentAddress'),permanent=bioVal('bioPermanentAddress'),objective=bioVal('bioObjective'),skills=bioVal('bioSkills'),org=bioVal('bioOrg'),designation=bioVal('bioDesignation'),duration=bioVal('bioDuration'),responsibilities=bioVal('bioResponsibilities'),certifications=bioVal('bioCertifications'),achievements=bioVal('bioAchievements'),languageDetails=bioVal('bioLanguageDetails'),hobbies=bioVal('bioHobbies'),references=bioVal('bioReferences'),declaration=bioVal('bioDeclaration'),place=bioVal('bioPlace'),date=bioVal('bioDate');
   let education='';
   for(let i=1;i<=4;i++){const q=bioVal('edu'+i+'q'),b=bioVal('edu'+i+'b'),inst=bioVal('edu'+i+'i'),y=bioVal('edu'+i+'y'),p=bioVal('edu'+i+'p');if(q||b||inst||y||p)education+='<tr><td>'+esc(q)+'</td><td>'+esc(b)+'</td><td>'+esc(inst)+'</td><td>'+esc(y)+'</td><td>'+esc(p)+'</td></tr>';}
@@ -154,7 +161,7 @@ function makeBio(){
   const contact=[['Full Name',name],['Mobile Number',mobile],['Email',email],['Current Address',current],['Permanent Address',permanent]].filter(x=>x[1]);
   const personal=[['Date of Birth',dob],['Gender',gender],["Father's / Guardian's Name",father],['Nationality',nationality],['Marital Status',marital],['Languages Known',languages]].filter(x=>x[1]);
   const table=rows=>'<table class="bio-personal">'+rows.map(x=>'<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td></tr>').join('')+'</table>';
-  let html='<div class="bio-header"><div><div class="bio-title">BIODATA</div>'+(name?'<div class="bio-name">'+esc(name)+'</div>':'')+(mobile||email?'<div class="bio-contact">'+esc([mobile,email].filter(Boolean).join('  |  '))+'</div>':'')+'</div>'+photoHtml+'</div>';
+  let html='<div class="bio-header"><div><div class="bio-title">'+esc(documentType)+'</div>'+(name?'<div class="bio-name">'+esc(name)+'</div>':'')+(mobile||email?'<div class="bio-contact">'+esc([mobile,email].filter(Boolean).join('  |  '))+'</div>':'')+'</div>'+photoHtml+'</div>';
   html+=bioSection('PERSONAL / CONTACT INFORMATION',contact.length?table(contact):'');
   html+=bioSection('PERSONAL DETAILS',personal.length?table(personal):'');
   html+=bioSection('CAREER OBJECTIVE',objective?'<div class="bio-text">'+esc(objective)+'</div>':'');
