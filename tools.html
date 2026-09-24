@@ -171,66 +171,75 @@ function makeBio(){
 }
 $('bioPhoto').addEventListener('change',async function(){const f=this.files[0],img=$('bioPhotoPreview');if(!f){img.style.display='none';img.removeAttribute('src');return}try{const src=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});img.src=src;img.style.display='block'}catch(e){img.style.display='none'}});
 function makeResume(){$('cvPreview').innerHTML='<h2>'+esc($('cvName').value)+'</h2><p style="text-align:center">'+esc($('cvContact').value)+'</p><hr><h3>Career Objective</h3><p>'+esc($('cvObjective').value).replace(/\n/g,'<br>')+'</p><h3>Education</h3><p>'+esc($('cvEducation').value).replace(/\n/g,'<br>')+'</p><h3>Skills</h3><p>'+esc($('cvSkills').value).replace(/\n/g,'<br>')+'</p><h3>Experience</h3><p>'+esc($('cvExperience').value).replace(/\n/g,'<br>')+'</p>'}
+async function loadBioPdfLibraries(){
+  const load=(src,ready)=>new Promise((resolve,reject)=>{
+    if(ready()){resolve();return;}
+    const old=document.querySelector('script[src="'+src+'"]');
+    if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(new Error('Could not load PDF library.')), {once:true});return;}
+    const sc=document.createElement('script');sc.src=src;sc.async=false;
+    sc.onload=()=>ready()?resolve():reject(new Error('PDF library loaded but is unavailable.'));
+    sc.onerror=()=>reject(new Error('Could not load PDF library.'));
+    document.head.appendChild(sc);
+  });
+  await load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>typeof window.html2canvas==='function');
+  await load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!(window.jspdf&&window.jspdf.jsPDF));
+}
 async function downloadBioPDF(){
   if(!selectedBioFormat){alert("Please choose a biodata format first.");return;}
   const el=$('bioPreview');
   if(!el||!el.innerHTML.trim()){alert("Please click Create Biodata first.");return;}
   const name=bioVal('bioName')||'Biodata';
-  const safeName=name.replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,80)||'Biodata';
+  const safeName=name.replace(/[^a-z0-9\u0900-\u097F]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,80)||'Biodata';
   const button=document.querySelector('#marriage-biodata .job-bio-actions .btn.blue');
   const originalText=button?button.textContent:'Download PDF';
   if(button){button.disabled=true;button.textContent='Generating PDF...';}
   let clone=null;
   try{
-    if(!window.html2canvas)throw new Error('PDF renderer did not load. Please refresh the page and try again.');
-    if(!window.jspdf||!window.jspdf.jsPDF)throw new Error('PDF library did not load. Please refresh the page and try again.');
+    await loadBioPdfLibraries();
     clone=el.cloneNode(true);
     clone.className='job-bio-preview bio-template-'+selectedBioFormat;
-    clone.style.cssText='position:absolute;left:-100000px;top:0;width:794px;max-width:none;min-height:0;margin:0;padding:34px 38px;background:#fff;border:0;display:block;visibility:visible;box-shadow:none;';
+    clone.style.cssText='position:absolute;left:-100000px;top:0;width:794px;max-width:none;min-height:0;height:auto;margin:0;padding:34px 38px;background:#fff;border:0;display:block;visibility:visible;box-shadow:none;overflow:visible;';
     clone.querySelectorAll('button,input,textarea,select').forEach(x=>x.remove());
     document.body.appendChild(clone);
     const imgs=[...clone.querySelectorAll('img')];
     await Promise.all(imgs.map(img=>new Promise(resolve=>{
       if(img.complete&&img.naturalWidth){resolve();return;}
       img.onload=img.onerror=()=>resolve();
+      setTimeout(resolve,5000);
     })));
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    const canvas=await html2canvas(clone,{
-      scale:2,
-      useCORS:true,
-      allowTaint:false,
-      backgroundColor:'#ffffff',
-      imageTimeout:15000,
-      logging:false,
-      windowWidth:794,
-      scrollX:0,
-      scrollY:0
-    });
-    if(!canvas.width||!canvas.height)throw new Error('The biodata preview could not be rendered.');
-    const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
-    const margin=10,pageW=210,pageH=297;
-    const contentW=pageW-margin*2,contentH=pageH-margin*2;
-    const pxPerPage=canvas.width*(contentH/contentW);
+    let canvas;
+    try{
+      canvas=await window.html2canvas(clone,{scale:1.5,useCORS:true,allowTaint:false,backgroundColor:'#fff',imageTimeout:10000,logging:false,width:794,windowWidth:794,scrollX:0,scrollY:0});
+    }catch(firstErr){
+      console.warn('Bio PDF first render retry:',firstErr);
+      canvas=await window.html2canvas(clone,{scale:1,useCORS:true,allowTaint:false,backgroundColor:'#fff',imageTimeout:5000,logging:false,width:794,windowWidth:794,scrollX:0,scrollY:0});
+    }
+    if(!canvas||!canvas.width||!canvas.height)throw new Error('Biodata preview could not be rendered.');
+    const JsPDF=window.jspdf.jsPDF;
+    const pdf=new JsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+    const margin=10,pageW=210,pageH=297,contentW=pageW-2*margin,contentH=pageH-2*margin;
+    const pxPerPage=Math.max(1,Math.floor(canvas.width*contentH/contentW));
     let offsetY=0,page=0;
     while(offsetY<canvas.height){
       const sliceH=Math.min(pxPerPage,canvas.height-offsetY);
       const slice=document.createElement('canvas');
-      slice.width=canvas.width;
-      slice.height=Math.ceil(sliceH);
+      slice.width=canvas.width;slice.height=Math.max(1,Math.ceil(sliceH));
       const ctx=slice.getContext('2d');
+      if(!ctx)throw new Error('Canvas rendering is not supported in this browser.');
       ctx.fillStyle='#fff';ctx.fillRect(0,0,slice.width,slice.height);
-      ctx.drawImage(canvas,0,offsetY,canvas.width,sliceH,0,0,canvas.width,sliceH);
-      const img=slice.toDataURL('image/jpeg',0.95);
-      const h=(sliceH/canvas.width)*contentW;
+      ctx.drawImage(canvas,0,offsetY,canvas.width,sliceH,0,0,canvas.width,slice.height);
+      const img=slice.toDataURL('image/jpeg',0.92);
+      const h=(slice.height/canvas.width)*contentW;
       if(page>0)pdf.addPage();
-      pdf.addImage(img,'JPEG',margin,margin,contentW,h,'BIODATA'+page,'FAST');
+      pdf.addImage(img,'JPEG',margin,margin,contentW,h,'bio-page-'+page,'FAST');
       offsetY+=sliceH;page++;
     }
+    if(!page)throw new Error('No PDF page was generated.');
     pdf.save('Computer-Prachi-Biodata-'+safeName+'.pdf');
   }catch(err){
     console.error('Bio Data PDF generation error:',err);
-    alert('PDF generation failed: '+(err&&err.message?err.message:'Unknown error')+'\nPlease refresh the page and try again.');
+    alert('PDF generation failed. '+(err&&err.message?err.message:'Please refresh the page and try again.'));
   }finally{
     if(clone)clone.remove();
     if(button){button.disabled=false;button.textContent=originalText;}
