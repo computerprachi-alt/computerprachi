@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shop Products | Computer Prachi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#222;font-family:Arial,Helvetica,sans-serif}.wrap{max-width:1100px;margin:auto;background:#fff;min-height:100vh}
+.head{background:linear-gradient(135deg,#071a55,#123c91);color:#fff;padding:18px;text-align:center}.head h1{margin:0;font-size:26px}.head p{margin:6px 0 0;font-size:13px}.nav{background:#102d69;text-align:center;padding:9px}.nav a{color:#fff;text-decoration:none;font-weight:700;margin:0 8px;font-size:13px}
+.main{padding:16px}.back{display:inline-block;margin-bottom:12px;color:#123d86;font-weight:700;text-decoration:none}.shophead{border:1px solid #cbd9ec;border-left:6px solid #087c18;background:#f8fff9;padding:14px;border-radius:9px;margin-bottom:14px}.shophead h2{margin:0;color:#102d69}.shophead p{margin:5px 0;color:#555}.search{width:100%;padding:11px;border:1px solid #bcc8d8;border-radius:7px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.product{border:1px solid #d8e1ef;border-radius:9px;padding:13px;background:#fff}.pic{text-align:center;font-size:42px;padding:9px;background:#f5f8fc;border-radius:7px}.product h3{margin:10px 0 4px;color:#102d69}.muted{color:#666;font-size:12px}.price{font-size:18px;font-weight:800;color:#087c18;margin:8px 0}.add{width:100%;border:0;background:#087c18;color:#fff;padding:10px;border-radius:6px;font-weight:800;cursor:pointer}.msg{text-align:center;min-height:18px;color:#087c18;font-size:12px;margin-top:6px}
+.cartbar{position:sticky;bottom:10px;margin:16px auto 0;max-width:500px;background:#071a55;color:#fff;padding:12px 15px;border-radius:9px;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,.18)}.cartbar a{color:#fff;font-weight:800;text-decoration:none}
+@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="wrap">
+<header class="head"><h1>🛍️ Shop Products</h1><p>Product चुनें और Cart में जोड़ें</p></header>
+<nav class="nav"><a href="index.html">⌂ Home</a><a href="local-shopping.html">← Shops</a><a href="shopping-cart.html">🛍️ Cart (<span id="navCart">0</span>)</a></nav>
+<main class="main">
+<a class="back" href="local-shopping.html">← सभी Shops</a>
+<section class="shophead"><h2 id="shopName">Shop</h2><p id="shopInfo"></p></section>
+<input id="search" class="search" type="search" placeholder="🔎 इस shop में product खोजें...">
+<div id="products" class="grid"></div>
+<div class="cartbar">🛒 <span id="cartCount">0</span> item • <a href="shopping-cart.html">Cart खोलें →</a></div>
+</main></div>
+<script>
+const shops={
+"bhagalpur-mart":{name:"Bhagalpur Daily Mart",area:"Tilkamanjhi",products:[
+["rice-5kg","चावल 5 KG","🍚",320],["atta-5kg","आटा 5 KG","🌾",240],["sugar-1kg","चीनी 1 KG","🧂",48],["oil-1l","Cooking Oil 1 L","🫗",145],["dal-1kg","दाल 1 KG","🥣",120],["soap-pack","Bath Soap Pack","🧼",95]]},
+"city-grocery":{name:"City Grocery Store",area:"Bhagalpur",products:[
+["milk-1l","Milk 1 L","🥛",62],["bread","Bread","🍞",45],["biscuits","Biscuits","🍪",30],["noodles","Noodles","🍜",45],["tea","Tea 250g","☕",110],["salt","Salt 1 KG","🧂",25]]},
+"health-care":{name:"Local Health Care",area:"Tilkamanjhi",products:[
+["mask","Face Mask Pack","😷",60],["sanitizer","Hand Sanitizer","🧴",85],["bandage","Bandage Pack","🩹",45],["toothpaste","Toothpaste","🪥",95],["shampoo","Shampoo","🧴",120],["vitamins","Personal Care Item","💊",150]]},
+"student-stationery":{name:"Student Stationery",area:"Bhagalpur",products:[
+["notebook","Notebook","📓",45],["pen","Pen Pack","🖊️",35],["file","Document File","📁",25],["pencil","Pencil Pack","✏️",30],["register","Register","📒",80],["print","Print / Copy Service","🖨️",5]]},
+"smart-electronics":{name:"Smart Electronics",area:"Bhagalpur",products:[
+["usb","USB Cable","🔌",149],["charger","Mobile Charger","🔋",299],["earphone","Earphones","🎧",249],["mouse","Wireless Mouse","🖱️",399],["keyboard","Keyboard","⌨️",499],["pendrive","Pen Drive 32GB","💾",399]]},
+"campus-store":{name:"Campus General Store",area:"Tilkamanjhi",products:[
+["water","Mineral Water","💧",20],["juice","Juice","🧃",40],["chips","Chips","🥔",30],["chocolate","Chocolate","🍫",50],["namkeen","Namkeen","🥨",55],["tissue","Tissue Pack","🧻",60]]}
+};
+const id=new URLSearchParams(location.search).get("shop")||"bhagalpur-mart";const shop=shops[id]||shops["bhagalpur-mart"];
+document.getElementById("shopName").textContent="🏪 "+shop.name;document.getElementById("shopInfo").textContent="📍 "+shop.area+" • Local Delivery";
+let data=shop.products;
+function cart(){return JSON.parse(localStorage.getItem("cpCart")||"{}")}
+function count(){let c=Object.values(cart()).reduce((a,x)=>a+(x.qty||0),0);document.getElementById("cartCount").textContent=c;document.getElementById("navCart").textContent=c}
+function add(p){let c=cart();if(!c[p[0]])c[p[0]]={id:p[0],name:p[1],price:p[3],shop:shop.name,qty:0};c[p[0]].qty++;localStorage.setItem("cpCart",JSON.stringify(c));count()}
+function render(){let q=document.getElementById("search").value.toLowerCase();document.getElementById("products").innerHTML=data.filter(p=>p[1].toLowerCase().includes(q)).map(p=>`<article class="product"><div class="pic">${p[2]}</div><h3>${p[1]}</h3><div class="muted">${shop.name}</div><div class="price">₹${p[3]}</div><button class="add" onclick='add(${JSON.stringify(p)})'>+ Add to Cart</button></article>`).join("")}
+document.getElementById("search").oninput=render;render();count();
+</script></body></html>

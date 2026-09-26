@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local Shopping / Home Delivery | Computer Prachi</title>
+<meta name="description" content="Computer Prachi Local Shopping और Home Delivery - अपने आसपास की दुकान चुनें और सामान order करें।">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#222;font-family:Arial,Helvetica,sans-serif}
+.wrap{max-width:1100px;margin:auto;background:#fff;min-height:100vh}.head{background:linear-gradient(135deg,#071a55,#123c91);color:#fff;padding:20px;text-align:center}.head h1{margin:0;font-size:28px}.head p{margin:7px 0 0;font-size:14px}
+.nav{background:#102d69;text-align:center;padding:9px}.nav a{color:#fff;text-decoration:none;font-weight:700;margin:0 8px;font-size:13px}
+.main{padding:16px}.hero{border:1px solid #cbd9ec;border-left:6px solid #087c18;background:#f8fff9;padding:16px;border-radius:9px;margin-bottom:14px}.hero h2{margin:0 0 7px;color:#102d69}.hero p{margin:5px 0;line-height:1.6}
+.search{width:100%;padding:12px;border:1px solid #bcc8d8;border-radius:7px;font-size:14px;margin:8px 0 14px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.filters button{border:1px solid #cbd9ec;background:#fff;color:#123d86;padding:8px 12px;border-radius:18px;font-weight:700;cursor:pointer}.filters button.active{background:#087c18;color:#fff;border-color:#087c18}
+.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.shop{border:1px solid #d8e1ef;border-radius:9px;background:#fff;overflow:hidden;box-shadow:0 2px 7px rgba(15,45,95,.06)}.shop-top{background:#eef5ff;padding:14px;text-align:center;font-size:38px}.shop-body{padding:13px}.shop h3{margin:0 0 5px;color:#102d69}.shop p{margin:4px 0;color:#555;font-size:13px;line-height:1.45}.badge{display:inline-block;margin-top:7px;background:#e9f8ec;color:#087c18;border-radius:14px;padding:4px 8px;font-size:11px;font-weight:700}.open-btn{display:block;margin-top:11px;background:#087c18;color:#fff;text-decoration:none;text-align:center;padding:10px;border-radius:6px;font-weight:800}
+.cartbar{position:sticky;bottom:10px;margin:16px auto 0;max-width:500px;background:#071a55;color:#fff;padding:12px 15px;border-radius:9px;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,.18)}.cartbar a{color:#fff;font-weight:800;text-decoration:none}
+.empty{text-align:center;padding:25px;color:#777;display:none}
+@media(max-width:800px){.shop-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.shop-grid{grid-template-columns:1fr}.head h1{font-size:23px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="head"><h1>🛒 Computer Prachi Local Shopping</h1><p>Local Shops • Products • Cart • Home Delivery</p></header>
+<nav class="nav">
+<a href="index.html">⌂ Home</a><a href="local-shopping.html">🛒 Shopping</a><a href="shopping-cart.html">🛍️ Cart (<span id="navCart">0</span>)</a>
+</nav>
+<main class="main">
+<section class="hero">
+<h2>अपने आसपास की दुकान चुनें</h2>
+<p>पहले Shop चुनें। इसके बाद उस Shop के products देखकर Cart में सामान जोड़ सकेंगे।</p>
+</section>
+<input id="shopSearch" class="search" type="search" placeholder="🔎 Shop का नाम, category या area खोजें...">
+<div class="filters">
+<button class="active" data-cat="all">All Shops</button>
+<button data-cat="grocery">Grocery</button>
+<button data-cat="medical">Medical</button>
+<button data-cat="stationery">Stationery</button>
+<button data-cat="electronics">Electronics</button>
+</div>
+<div id="shopGrid" class="shop-grid"></div>
+<div id="empty" class="empty">कोई matching shop नहीं मिली।</div>
+<div class="cartbar">🛒 Cart में <span id="cartCount">0</span> item • <a href="shopping-cart.html">Cart देखें →</a></div>
+</main>
+</div>
+<script>
+const shops=[
+{id:"bhagalpur-mart",name:"Bhagalpur Daily Mart",cat:"grocery",area:"Tilkamanjhi",icon:"🛒",desc:"Daily grocery, household items और packaged food."},
+{id:"city-grocery",name:"City Grocery Store",cat:"grocery",area:"Bhagalpur",icon:"🥦",desc:"रोजमर्रा का सामान और kitchen essentials."},
+{id:"health-care",name:"Local Health Care",cat:"medical",area:"Tilkamanjhi",icon:"💊",desc:"Health और personal-care products."},
+{id:"student-stationery",name:"Student Stationery",cat:"stationery",area:"Bhagalpur",icon:"📚",desc:"Copies, pens, files, print और study material."},
+{id:"smart-electronics",name:"Smart Electronics",cat:"electronics",area:"Bhagalpur",icon:"📱",desc:"Mobile accessories और छोटे electronics."},
+{id:"campus-store",name:"Campus General Store",cat:"grocery",area:"Tilkamanjhi",icon:"🏪",desc:"Snacks, beverages और daily-use products."}
+];
+let selected="all";
+function count(){let c=Object.values(JSON.parse(localStorage.getItem("cpCart")||"{}")).reduce((a,x)=>a+(x.qty||0),0);document.getElementById("cartCount").textContent=c;document.getElementById("navCart").textContent=c}
+function render(){
+ const q=document.getElementById("shopSearch").value.toLowerCase().trim();
+ const list=shops.filter(x=>(selected==="all"||x.cat===selected)&&(!q||[x.name,x.cat,x.area,x.desc].join(" ").toLowerCase().includes(q)));
+ document.getElementById("shopGrid").innerHTML=list.map(x=>`<article class="shop"><div class="shop-top">${x.icon}</div><div class="shop-body"><h3>${x.name}</h3><p>📍 ${x.area}</p><p>${x.desc}</p><span class="badge">${x.cat.toUpperCase()}</span><a class="open-btn" href="shopping-shop.html?shop=${encodeURIComponent(x.id)}">View Shop →</a></div></article>`).join("");
+ document.getElementById("empty").style.display=list.length?"none":"block";
+}
+document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));b.classList.add("active");selected=b.dataset.cat;render()});
+document.getElementById("shopSearch").oninput=render;render();count();
+</script>
+</body>
+</html>
