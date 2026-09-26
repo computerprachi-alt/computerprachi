@@ -355,6 +355,69 @@ def extract_category(url, heading_hint):
         raise RuntimeError(f"Source parsing failed for {heading_hint}: no article items at {url}")
     return out[:70]
 
+def title_category(title):
+    """Return the most specific content category implied by a title.
+
+    Source category pages can occasionally contain a neighboring update type.
+    This final title-level guard keeps Computer Prachi sections mutually
+    exclusive even when the source site mixes categories.
+    """
+    t = clean(title).lower()
+    if any(x in t for x in (
+        "answer key", "answer-key", "response sheet", "response-sheet"
+    )):
+        return "answer"
+    if any(x in t for x in (
+        "admit card", "hall ticket", "exam city", "exam date", "exam schedule",
+        "interview letter", "interview schedule", "typing test date",
+        "physical admit", "physical test", "pet admit"
+    )):
+        return "admit"
+    if any(x in t for x in (
+        "result", "score card", "scorecard", "certificate", "allotment result",
+        "merit list", "selection list", "final result"
+    )):
+        return "results"
+    if any(x in t for x in (
+        "recruitment", "vacancy", "vacancies", "online form", "apply online",
+        "application form", "notification"
+    )):
+        return "jobs"
+    return ""
+
+def enforce_category_separation(items):
+    """Remove cross-category items and move obvious typed updates to their home.
+
+    This is intentionally title-based as a safety net after source extraction;
+    it does not invent content and does not alter any existing official URL.
+    """
+    buckets = {k: list(v or []) for k, v in items.items()}
+    moved = {"answer": [], "admit": [], "results": [], "jobs": []}
+
+    for heading, kind in (("Latest Jobs", "jobs"), ("Results", "results"),
+                          ("Admit Cards", "admit"), ("Answer Key", "answer")):
+        kept = []
+        for item in buckets.get(heading, []):
+            detected = title_category(item.get("title", ""))
+            if detected and detected != kind:
+                moved[detected].append(item)
+            else:
+                kept.append(item)
+        buckets[heading] = kept
+
+    heading_for = {"answer": "Answer Key", "admit": "Admit Cards",
+                   "results": "Results", "jobs": "Latest Jobs"}
+    for kind, arr in moved.items():
+        target = heading_for[kind]
+        existing = {clean(x.get("title", "")).lower() for x in buckets[target]}
+        for item in arr:
+            key = clean(item.get("title", "")).lower()
+            if key and key not in existing:
+                buckets[target].append(item)
+                existing.add(key)
+
+    return buckets
+
 def li(item, kind):
     # Mixed Latest Update entries carry their real category so links still
     # open the correct category-specific detail page.
@@ -478,6 +541,139 @@ def stamp_update_date():
         )
         path.write_text(text, encoding="utf-8")
 
+def extract_job_details(source_url):
+    """Extract job dates and category-wise fees from the source detail page.
+
+    The source pages use several layouts (tables, bullet lists and plain text).
+    We parse each visible row/line separately so values such as
+    ``General / OBC / EWS : ₹500`` and ``SC / ST / EBC : ₹250`` are captured
+    correctly instead of swallowing the next category.  Missing information is
+    shown as a verification message rather than a blank field.
+    """
+    fallback = "See Official Notification"
+    result = {
+        "begin": fallback, "last": fallback, "feeLast": fallback,
+        "feeGen": fallback, "feeOBC": fallback, "feeSC": fallback,
+        "feeST": fallback, "feeReserved": fallback,
+        "feeFemale": fallback, "feeMode": fallback
+    }
+    try:
+        soup = fetch(source_url)
+        lines = []
+        for node in soup.find_all(["tr", "li", "p", "h1", "h2", "h3", "h4", "div"]):
+            txt = clean(node.get_text(" ", strip=True))
+            if txt and len(txt) <= 500:
+                lines.append(txt)
+        # De-duplicate while preserving page order.
+        seen = set()
+        lines = [x for x in lines if not (x in seen or seen.add(x))]
+
+        def after_label(patterns, max_len=160):
+            for line in lines:
+                for pat in patterns:
+                    m = re.search(pat, line, re.I)
+                    if m:
+                        value = clean(m.group(1)).strip(" -:|,;")
+                        if value and len(value) <= max_len:
+                            return value
+            return ""
+
+        # Dates: match the common labels used by government recruitment pages.
+        result["begin"] = after_label([
+            r"(?:online\s+apply\s+)?(?:start|starting|opening|application\s+begin|form\s+begin)\s*(?:date)?\s*[:\-]\s*(.+)$",
+            r"(?:online\s+apply\s+)?start\s+date\s*[:\-]\s*(.+)$",
+            r"application\s+start\s+date\s*[:\-]\s*(.+)$",
+            r"online\s+application\s+start\s+date\s*[:\-]\s*(.+)$"
+        ]) or fallback
+        result["last"] = after_label([
+            r"last\s+date\s+(?:for\s+)?(?:apply\s+online|online\s+apply)\s*[:\-]\s*(.+)$",
+            r"(?:online\s+apply\s+)?last\s+date\s*[:\-]\s*(.+)$",
+            r"closing\s+date\s*[:\-]\s*(.+)$",
+            r"application\s+last\s+date\s*[:\-]\s*(.+)$"
+        ]) or fallback
+        result["feeLast"] = after_label([
+            r"last\s+date\s+for\s+fee\s+payment\s*[:\-]\s*(.+)$",
+            r"last\s+date\s+for\s+pay(?:ing)?\s+(?:the\s+)?(?:application\s+)?fee\s*[:\-]\s*(.+)$",
+            r"fee\s+(?:payment\s+)?last\s+date\s*[:\-]\s*(.+)$"
+        ]) or result["last"]
+
+        # Fee lines. Prefer combined category rows, then fall back to individual labels.
+        for line in lines:
+            low = line.lower()
+            if not ("fee" in low or "application" in low and "general" in low):
+                continue
+            m = re.search(r"general\s*/\s*obc\s*(?:/\s*ews)?\s*[:\-]\s*(.+)$", line, re.I)
+            if m:
+                val = clean(m.group(1))
+                result["feeGen"] = val
+                result["feeOBC"] = val
+            # Some sources publish one fee for every category.
+            m = re.search(r"(?:for\s+)?all\s+category(?:\s+candidate(?:s)?)?\s*[:\-]\s*(.+)$", line, re.I)
+            if m:
+                val = clean(m.group(1))
+                result["feeGen"] = val
+                result["feeOBC"] = val
+                result["feeSC"] = val
+                result["feeST"] = val
+                result["feeReserved"] = val
+                result["feeFemale"] = val
+            m = re.search(r"(?:sc\s*/\s*st|sc\s*/\s*st\s*/\s*ebc|sc\s*/\s*st\s*/\s*pwd|sc\s*/\s*st\s*/\s*ebc)\s*[:\-]\s*(.+)$", line, re.I)
+            if m:
+                val = clean(m.group(1))
+                result["feeSC"] = val
+                result["feeST"] = val
+                result["feeReserved"] = val
+            m = re.search(r"(?:all\s+category\s+)?(?:female|women)\s*(?:category)?\s*[:\-]\s*(.+)$", line, re.I)
+            if m:
+                result["feeFemale"] = clean(m.group(1))
+            m = re.search(r"payment\s+mode(?:\s*\(online\))?\s*[:\-]\s*(.+)$", line, re.I)
+            if m:
+                result["feeMode"] = clean(m.group(1))
+
+        # Individual-category fallback for sources that use separate table rows.
+        for line in lines:
+            if result["feeOBC"] == fallback:
+                m = re.search(r"\bobc\b(?:\s*/\s*ews)?\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
+                if m: result["feeOBC"] = clean(m.group(1))
+            if result["feeSC"] == fallback:
+                m = re.search(r"\bsc\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
+                if m: result["feeSC"] = clean(m.group(1))
+            if result["feeST"] == fallback:
+                m = re.search(r"\bst\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
+                if m: result["feeST"] = clean(m.group(1))
+            if result["feeFemale"] == fallback:
+                m = re.search(r"\b(?:female|women)\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
+                if m: result["feeFemale"] = clean(m.group(1))
+
+        # Generic application/exam fee fallback only when category data is absent.
+        if result["feeGen"] == fallback:
+            for line in lines:
+                m = re.search(r"(?:application|exam)\s+fee\s*[:\-]\s*(.+)$", line, re.I)
+                if m:
+                    result["feeGen"] = clean(m.group(1))
+                    break
+
+        # Never leave reserved categories blank when the source gives one combined value.
+        if result["feeReserved"] != fallback:
+            if result["feeSC"] == fallback: result["feeSC"] = result["feeReserved"]
+            if result["feeST"] == fallback: result["feeST"] = result["feeReserved"]
+        return result
+    except Exception as exc:
+        print(f"WARNING: Could not extract job metadata from {source_url}: {exc}")
+        return result
+
+def write_auto_job_data(items):
+    """Write regenerated job metadata used by job.html on every auto-update."""
+    data = {}
+    for item in items.get("Latest Jobs", []):
+        details = extract_job_details(item.get("url", ""))
+        key = urlparse(item.get("url", "")).path.strip("/") + "/"
+        if key.strip("/"): data[key] = details
+        data[item.get("title", "")] = details
+    target = BASE / "cp-auto-job-data.js"
+    import json
+    target.write_text("window.CP_AUTO_JOB_DATA=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";", encoding="utf-8")
+
 PINNED_DOCUMENT_SERVICES = [
     {"title": "Aadhaar Card Download – Official UIDAI", "url": "https://myaadhaar.uidai.gov.in/genricDownloadAadhaar/en", "official": "https://myaadhaar.uidai.gov.in/genricDownloadAadhaar/en"},
     {"title": "Aadhaar Card Correction / Update – Official UIDAI", "url": "https://myaadhaar.uidai.gov.in/", "official": "https://myaadhaar.uidai.gov.in/"},
@@ -507,12 +703,21 @@ def main():
     pinned = [dict(x) for x in PINNED_DOCUMENT_SERVICES if x.get("url") not in existing_doc_urls]
     items["Documents"] = pinned + items.get("Documents", [])
 
+    # Final category guard: source pages can occasionally mix neighboring
+    # update types. Keep Jobs / Results / Admit Card / Answer Key mutually
+    # exclusive before writing any page or index.
+    items = enforce_category_separation(items)
+
     primary = sum(
         bool(items.get(k)) for k in ("Latest Jobs", "Results", "Admit Cards")
     )
     if primary < 2:
         print("WARNING: Source server was unreachable. No existing page was overwritten.")
         return
+
+    # Regenerate job dates/fees only after a successful source refresh.
+    # A temporary source outage therefore cannot erase the last generated metadata.
+    write_auto_job_data(items)
 
     # Strong sanity check: the first items of categories should not all be
     # identical. This prevents cross-category contamination.

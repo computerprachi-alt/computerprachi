@@ -1,7 +1,8 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="utf-8"/><meta content="width=device-width,initial-scale=1.0" name="viewport"/>
 <title>Computer Prachi Tools</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f3f3;color:#222}.wrap{max-width:944px;margin:auto;background:#fff;min-height:100vh}.top{background:#c00;color:#fff;padding:10px 18px;font-size:20px;font-weight:700}.head{padding:16px 18px}.head h1{margin:0;color:#08256b;font-size:32px}.head p{margin:5px 0;color:#c00}.nav{background:#07145c;display:flex;flex-wrap:wrap;padding:0 10px}.nav a{color:#fff;text-decoration:none;padding:12px 14px;font-weight:700;font-size:13px}.nav a:hover{background:#10247d}.box{margin:18px;border:1px solid #ddd}.box h2{margin:0;background:#07145c;color:#fff;text-align:center;padding:10px;font-size:20px}.tools{padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.tool{display:block;text-decoration:none;border:1px solid #ddd;background:#fafafa;padding:14px 16px;font-size:16px;font-weight:700;color:#111;border-left:5px solid #d71920;cursor:pointer}.tool:hover{background:#eef3ff;color:#07145c}.panel{display:none;margin:18px;border:1px solid #ddd;padding:18px;background:#fff}.panel:target{display:block}.panel h3{margin:-18px -18px 15px;background:#d71920;color:#fff;padding:10px;text-align:center}.field{margin:10px 0}.field label{display:block;font-weight:700;margin-bottom:5px}.field input,.field textarea,.field select{width:100%;padding:9px;border:1px solid #bbb;border-radius:3px;font-size:14px}.btn{background:#07851b;color:#fff;border:0;padding:10px 15px;border-radius:4px;font-weight:700;cursor:pointer;margin:4px}.btn.blue{background:#0875c9}.btn.gray{background:#555}.preview{margin-top:15px;border:1px solid #bbb;padding:18px;background:#fff}.resume-preview h2,.bio-preview h2{text-align:center;margin-top:0;color:#08256b}.photo-preview{text-align:center}.photo-preview img{max-width:100%;border:1px solid #aaa}.canvas-wrap{text-align:center}.canvas-wrap canvas{max-width:100%;border:1px solid #aaa}.result{margin-top:12px;padding:10px;background:#f5f8ff;border:1px solid #cbd7ee;font-weight:700}.typing-text{padding:14px;background:#f7f7f7;border:1px solid #ccc;line-height:1.8}.typing-text span{white-space:pre-wrap}.typing-input{min-height:120px}.timer{font-size:28px;text-align:center;font-weight:700;color:#c00;margin:10px}.small{font-size:12px;color:#666}.tool-back{margin:0 18px 18px}.join-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:650px){.tools,.join-grid{grid-template-columns:1fr}.head h1{font-size:26px}}
@@ -76,8 +77,8 @@
 <style id="cp-live-clock-style">
 .cp-live-clock{position:absolute;right:145px;top:6px;z-index:9999;display:flex;align-items:center;gap:5px;font:600 11px/1.1 Arial,sans-serif;color:#fff;white-space:nowrap}.cp-live-clock .cp-time{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.24);border-radius:13px;padding:4px 8px}.cp-live-clock .cp-date{opacity:.9}@media(max-width:900px){.cp-live-clock{right:118px;font-size:10px}.cp-live-clock .cp-date{display:none}}@media(max-width:700px){.cp-live-clock{right:8px;top:4px}.cp-live-clock .cp-date{display:none}.cp-live-clock .cp-time{padding:4px 7px}}
 </style>
-</head>
-<body><div id="cp-live-clock" class="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div>
+<meta content="Computer Prachi Tools: image resize, images to PDF, typing और document preparation के useful online tools।" name="description"/></head>
+<body><div class="cp-live-clock" id="cp-live-clock"><span class="cp-time">🕐 --:--:-- --</span><span class="cp-date">--</span></div>
 <div class="wrap">
 <div class="top">Computer Prachi – Computer Prachi Tools</div>
 <div class="head"><h1>Computer Prachi</h1><p>Useful Online Tools for Students</p></div>
@@ -96,76 +97,67 @@
 <a class="tool" href="#photo-name-date">6. Name &amp; Date on Photo Maker</a>
 <a class="tool" href="#photo-signature">7. Photo Signature Joiner</a>
 </div></div>
-
-<section id="image-resizer" class="panel"><h3>Image Resizer</h3><div class="field"><label>Select Image</label><input type="file" id="resizeFile" accept="image/*"></div><div class="join-grid"><div class="field"><label>Width (px)</label><input id="resizeW" type="number" min="1"></div><div class="field"><label>Height (px)</label><input id="resizeH" type="number" min="1"></div></div><button class="btn" onclick="resizeImage()">Resize &amp; Download</button><div id="resizeMsg" class="result"></div></section>
-
-<section id="marriage-biodata" class="panel"><h3>Standard Professional Job Bio Data Maker</h3>
+<section class="panel" id="image-resizer"><h3>Image Resizer</h3><div class="field"><label>Select Image</label><input accept="image/*" id="resizeFile" type="file"/></div><div class="join-grid"><div class="field"><label>Width (px)</label><input id="resizeW" min="1" type="number"/></div><div class="field"><label>Height (px)</label><input id="resizeH" min="1" type="number"/></div></div><button class="btn" onclick="resizeImage()">Resize &amp; Download</button><div class="result" id="resizeMsg"></div></section>
+<section class="panel" id="marriage-biodata"><h3>Standard Professional Job Bio Data Maker</h3>
 <div class="bio-format-picker" id="bioFormatPicker"><h4>Choose Your Biodata Format</h4><div class="bio-format-grid">
-<button type="button" class="bio-format-card" data-format="1" onclick="selectBioFormat(1)"><span class="format-preview"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">1. Classic Clean</span></button>
-<button type="button" class="bio-format-card" data-format="2" onclick="selectBioFormat(2)"><span class="format-preview fp-blue"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">2. Modern Blue</span></button>
-<button type="button" class="bio-format-card" data-format="3" onclick="selectBioFormat(3)"><span class="format-preview fp-bw"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">3. Simple Black &amp; White</span></button>
-<button type="button" class="bio-format-card" data-format="4" onclick="selectBioFormat(4)"><span class="format-preview fp-two"><i class="fp-side"></i><i class="fp-main"><i class="fp-head"></i><i class="fp-line"></i><i class="fp-line short"></i></i></span><span class="format-name">4. Professional Two-Column</span></button>
-<button type="button" class="bio-format-card" data-format="5" onclick="selectBioFormat(5)"><span class="format-preview fp-creative"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">5. Creative Clean</span></button>
+<button class="bio-format-card" data-format="1" onclick="selectBioFormat(1)" type="button"><span class="format-preview"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">1. Classic Clean</span></button>
+<button class="bio-format-card" data-format="2" onclick="selectBioFormat(2)" type="button"><span class="format-preview fp-blue"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">2. Modern Blue</span></button>
+<button class="bio-format-card" data-format="3" onclick="selectBioFormat(3)" type="button"><span class="format-preview fp-bw"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">3. Simple Black &amp; White</span></button>
+<button class="bio-format-card" data-format="4" onclick="selectBioFormat(4)" type="button"><span class="format-preview fp-two"><i class="fp-side"></i><i class="fp-main"><i class="fp-head"></i><i class="fp-line"></i><i class="fp-line short"></i></i></span><span class="format-name">4. Professional Two-Column</span></button>
+<button class="bio-format-card" data-format="5" onclick="selectBioFormat(5)" type="button"><span class="format-preview fp-creative"><i class="fp-head"></i><i class="fp-photo"></i><i class="fp-line"></i><i class="fp-line short"></i><i class="fp-box"></i></span><span class="format-name">5. Creative Clean</span></button>
 </div></div>
-<div id="bioSelectedBar" class="job-bio-selected">Selected format: <span id="bioSelectedName"></span> <button type="button" class="btn blue" style="float:right;margin:-4px 0 0 8px" onclick="changeBioFormat()">Change Format</button></div>
+<div class="job-bio-selected" id="bioSelectedBar">Selected format: <span id="bioSelectedName"></span> <button class="btn blue" onclick="changeBioFormat()" style="float:right;margin:-4px 0 0 8px" type="button">Change Format</button></div>
 <div class="job-bio-form" id="bioForm" style="display:none">
 <div class="field bio-heading-selector"><label>Document Type / Heading</label><select id="bioDocumentType" onchange="updateBioDocumentHeading()"><option value="BIODATA">BIODATA</option><option value="CV">CV</option><option value="RESUME">RESUME</option><option value="COVER LETTER">COVER LETTER</option></select><small>Select the heading for this document. Your existing details and selected template remain unchanged.</small></div>
-
 <div class="job-bio-photo-row">
 <div>
 <div class="job-bio-grid">
-<div class="field"><label>Full Name</label><input id="bioName"></div>
-<div class="field"><label>Date of Birth</label><input id="bioDob" type="date"></div>
+<div class="field"><label>Full Name</label><input id="bioName"/></div>
+<div class="field"><label>Date of Birth</label><input id="bioDob" type="date"/></div>
 <div class="field"><label>Gender</label><select id="bioGender"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
-<div class="field"><label>Father's / Guardian's Name</label><input id="bioFather"></div>
-<div class="field"><label>Nationality</label><input id="bioNationality"></div>
+<div class="field"><label>Father's / Guardian's Name</label><input id="bioFather"/></div>
+<div class="field"><label>Nationality</label><input id="bioNationality"/></div>
 <div class="field"><label>Marital Status</label><select id="bioMarital"><option value="">Select</option><option>Single</option><option>Married</option><option>Other</option></select></div>
-<div class="field"><label>Languages Known</label><input id="bioLanguages"></div>
-<div class="field"><label>Mobile Number</label><input id="bioMobile" type="tel"></div>
-<div class="field"><label>Email</label><input id="bioEmail" type="email"></div>
+<div class="field"><label>Languages Known</label><input id="bioLanguages"/></div>
+<div class="field"><label>Mobile Number</label><input id="bioMobile" type="tel"/></div>
+<div class="field"><label>Email</label><input id="bioEmail" type="email"/></div>
 <div class="field full"><label>Current Address</label><textarea id="bioCurrentAddress" rows="2"></textarea></div>
 <div class="field full"><label>Permanent Address</label><textarea id="bioPermanentAddress" rows="2"></textarea></div>
 </div>
 </div>
-<div class="job-bio-photo-box"><label for="bioPhoto"><b>Passport-size Photo</b></label><input id="bioPhoto" type="file" accept="image/jpeg,image/png,image/webp"><img id="bioPhotoPreview" alt="Passport photo preview" style="display:none"></div>
+<div class="job-bio-photo-box"><label for="bioPhoto"><b>Passport-size Photo</b></label><input accept="image/jpeg,image/png,image/webp" id="bioPhoto" type="file"/><img alt="Passport photo preview" id="bioPhotoPreview" style="display:none"/></div>
 </div>
-<h4 class="job-bio-section-title">Career Objective / Profile Summary</h4><div class="field"><textarea id="bioObjective" rows="4" placeholder="Write your career objective or professional profile summary."></textarea></div>
+<h4 class="job-bio-section-title">Career Objective / Profile Summary</h4><div class="field"><textarea id="bioObjective" placeholder="Write your career objective or professional profile summary." rows="4"></textarea></div>
 <h4 class="job-bio-section-title">Educational Qualifications</h4>
 <div class="job-bio-table-wrap"><table class="job-bio-table"><thead><tr><th>Qualification</th><th>Board / University</th><th>Institution</th><th>Passing Year</th><th>Percentage / CGPA</th></tr></thead><tbody>
-<tr><td><input id="edu1q"></td><td><input id="edu1b"></td><td><input id="edu1i"></td><td><input id="edu1y"></td><td><input id="edu1p"></td></tr>
-<tr><td><input id="edu2q"></td><td><input id="edu2b"></td><td><input id="edu2i"></td><td><input id="edu2y"></td><td><input id="edu2p"></td></tr>
-<tr><td><input id="edu3q"></td><td><input id="edu3b"></td><td><input id="edu3i"></td><td><input id="edu3y"></td><td><input id="edu3p"></td></tr>
-<tr><td><input id="edu4q"></td><td><input id="edu4b"></td><td><input id="edu4i"></td><td><input id="edu4y"></td><td><input id="edu4p"></td></tr>
+<tr><td><input id="edu1q"/></td><td><input id="edu1b"/></td><td><input id="edu1i"/></td><td><input id="edu1y"/></td><td><input id="edu1p"/></td></tr>
+<tr><td><input id="edu2q"/></td><td><input id="edu2b"/></td><td><input id="edu2i"/></td><td><input id="edu2y"/></td><td><input id="edu2p"/></td></tr>
+<tr><td><input id="edu3q"/></td><td><input id="edu3b"/></td><td><input id="edu3i"/></td><td><input id="edu3y"/></td><td><input id="edu3p"/></td></tr>
+<tr><td><input id="edu4q"/></td><td><input id="edu4b"/></td><td><input id="edu4i"/></td><td><input id="edu4y"/></td><td><input id="edu4p"/></td></tr>
 </tbody></table></div>
 <h4 class="job-bio-section-title">Technical / Computer Skills</h4><div class="field"><textarea id="bioSkills" rows="3"></textarea></div>
-<h4 class="job-bio-section-title">Work Experience / Internship</h4><div class="job-bio-grid"><div class="field"><label>Organization</label><input id="bioOrg"></div><div class="field"><label>Designation</label><input id="bioDesignation"></div><div class="field"><label>Duration</label><input id="bioDuration"></div><div class="field full"><label>Responsibilities</label><textarea id="bioResponsibilities" rows="3"></textarea></div></div>
+<h4 class="job-bio-section-title">Work Experience / Internship</h4><div class="job-bio-grid"><div class="field"><label>Organization</label><input id="bioOrg"/></div><div class="field"><label>Designation</label><input id="bioDesignation"/></div><div class="field"><label>Duration</label><input id="bioDuration"/></div><div class="field full"><label>Responsibilities</label><textarea id="bioResponsibilities" rows="3"></textarea></div></div>
 <h4 class="job-bio-section-title">Certifications / Courses</h4><div class="field"><textarea id="bioCertifications" rows="3"></textarea></div>
 <h4 class="job-bio-section-title">Achievements</h4><div class="field"><textarea id="bioAchievements" rows="3"></textarea></div>
 <h4 class="job-bio-section-title">Languages Known</h4><div class="field"><textarea id="bioLanguageDetails" rows="2"></textarea></div>
 <h4 class="job-bio-section-title">Hobbies / Interests</h4><div class="field"><textarea id="bioHobbies" rows="2"></textarea></div>
 <h4 class="job-bio-section-title">References (Optional)</h4><div class="field"><textarea id="bioReferences" rows="3"></textarea></div>
-<h4 class="job-bio-section-title">Declaration</h4><div class="field"><textarea id="bioDeclaration" rows="4" placeholder="I hereby declare that the information provided above is true and correct to the best of my knowledge."></textarea></div>
-<div class="job-bio-grid"><div class="field"><label>Place</label><input id="bioPlace"></div><div class="field"><label>Date</label><input id="bioDate" type="date"></div></div>
-<div class="job-bio-actions"><button class="btn" onclick="makeBio()">Create Biodata</button><button class="btn blue" type="button" onclick="downloadBioPDF()">Download PDF</button><button class="btn gray" type="button" onclick="changeBioFormat()">Change Format</button></div>
+<h4 class="job-bio-section-title">Declaration</h4><div class="field"><textarea id="bioDeclaration" placeholder="I hereby declare that the information provided above is true and correct to the best of my knowledge." rows="4"></textarea></div>
+<div class="job-bio-grid"><div class="field"><label>Place</label><input id="bioPlace"/></div><div class="field"><label>Date</label><input id="bioDate" type="date"/></div></div>
+<div class="job-bio-actions"><button class="btn" onclick="makeBio()">Create Biodata</button><button class="btn blue" onclick="downloadBioPDF()" type="button">Download PDF</button><button class="btn gray" onclick="changeBioFormat()" type="button">Change Format</button></div>
 <p class="job-bio-note">Only information entered by you is used. Empty fields are left blank or omitted from the generated biodata.</p>
 </div>
-<div id="bioPreview" class="job-bio-preview"></div></section>
-
-<section id="resume" class="panel"><h3>Resume/CV Maker</h3><div class="join-grid"><div class="field"><label>Full Name</label><input id="cvName"></div><div class="field"><label>Mobile / Email</label><input id="cvContact"></div><div class="field"><label>Career Objective</label><textarea id="cvObjective"></textarea></div><div class="field"><label>Education</label><textarea id="cvEducation"></textarea></div><div class="field"><label>Skills</label><textarea id="cvSkills"></textarea></div><div class="field"><label>Experience</label><textarea id="cvExperience"></textarea></div></div><button class="btn" onclick="makeResume()">Create Resume</button><button class="btn blue" onclick="printArea('cvPreview')">Print / Save PDF</button><div id="cvPreview" class="preview resume-preview"></div></section>
-
-<section id="jpg-pdf" class="panel"><h3>JPG to PDF Converter</h3><div class="field"><label>Select JPG / PNG Images</label><input id="pdfFiles" type="file" accept="image/jpeg,image/png" multiple></div><button class="btn" onclick="jpgToPdf()">Convert &amp; Download PDF</button><div id="pdfMsg" class="result"></div></section>
-
-<section id="typing" class="panel"><h3>Typing Test</h3><div class="timer" id="typingTimer">60</div><div class="typing-text" id="typingText">India is a diverse country with many languages, cultures and traditions. Computer Prachi provides useful information, government job updates and online tools for students.</div><div class="field"><label>Type the text above</label><textarea id="typingInput" class="typing-input" disabled></textarea></div><button class="btn" id="typingStart" onclick="startTyping()">Start Test</button><div id="typingResult" class="result"></div></section>
-
-<section id="percentage" class="panel"><h3>Percentage Calculator</h3><div class="join-grid"><div class="field"><label>Obtained Marks</label><input id="pctObt" type="number" min="0"></div><div class="field"><label>Total Marks</label><input id="pctTotal" type="number" min="1"></div></div><button class="btn" onclick="calcPercentage()">Calculate</button><div id="pctResult" class="result"></div></section>
-<section id="cgpa" class="panel"><h3>CGPA to Percentage</h3><div class="field"><label>CGPA (10 point scale)</label><input id="cgpaValue" type="number" min="0" max="10" step="0.01"></div><button class="btn" onclick="calcCgpa()">Convert</button><div id="cgpaResult" class="result"></div><p class="small">Common formula: Percentage = CGPA × 9.5. Check your board/university rules if a different formula is specified.</p></section>
-<section id="date-difference" class="panel"><h3>Date Difference Calculator</h3><div class="join-grid"><div class="field"><label>Start Date</label><input id="dateStart" type="date"></div><div class="field"><label>End Date</label><input id="dateEnd" type="date"></div></div><button class="btn" onclick="dateDifference()">Calculate</button><div id="dateResult" class="result"></div></section>
-<section id="countdown" class="panel"><h3>Exam Countdown</h3><div class="field"><label>Exam Date &amp; Time</label><input id="countdownDate" type="datetime-local"></div><button class="btn" onclick="startCountdown()">Start Countdown</button><div id="countdownResult" class="result"></div></section>
-<section id="age" class="panel"><h3>Age Calculator</h3><div class="field"><label>Date of Birth</label><input id="ageDob" type="date"></div><button class="btn" onclick="calculateAge()">Calculate Age</button><div id="ageResult" class="result"></div></section>
-
-<section id="photo-name-date" class="panel"><h3>Name &amp; Date on Photo Maker</h3><div class="field"><label>Select Photo</label><input id="namePhoto" type="file" accept="image/*"></div><div class="join-grid"><div class="field"><label>Name</label><input id="photoName" placeholder="Your Name"></div><div class="field"><label>Date</label><input id="photoDate" type="date"></div></div><button class="btn" onclick="makeNameDatePhoto()">Create &amp; Download</button><div id="namePhotoOut" class="canvas-wrap"></div></section>
-
-<section id="photo-signature" class="panel"><h3>Photo Signature Joiner</h3><div class="join-grid"><div class="field"><label>Photo</label><input id="joinPhoto" type="file" accept="image/*"></div><div class="field"><label>Signature</label><input id="joinSign" type="file" accept="image/*"></div></div><button class="btn" onclick="joinPhotoSignature()">Join &amp; Download</button><div id="joinOut" class="canvas-wrap"></div></section>
+<div class="job-bio-preview" id="bioPreview"></div></section>
+<section class="panel" id="resume"><h3>Resume/CV Maker</h3><div class="join-grid"><div class="field"><label>Full Name</label><input id="cvName"/></div><div class="field"><label>Mobile / Email</label><input id="cvContact"/></div><div class="field"><label>Career Objective</label><textarea id="cvObjective"></textarea></div><div class="field"><label>Education</label><textarea id="cvEducation"></textarea></div><div class="field"><label>Skills</label><textarea id="cvSkills"></textarea></div><div class="field"><label>Experience</label><textarea id="cvExperience"></textarea></div></div><button class="btn" onclick="makeResume()">Create Resume</button><button class="btn blue" onclick="printArea('cvPreview')">Print / Save PDF</button><div class="preview resume-preview" id="cvPreview"></div></section>
+<section class="panel" id="jpg-pdf"><h3>JPG to PDF Converter</h3><div class="field"><label>Select JPG / PNG Images</label><input accept="image/jpeg,image/png" id="pdfFiles" multiple="" type="file"/></div><button class="btn" onclick="jpgToPdf()">Convert &amp; Download PDF</button><div class="result" id="pdfMsg"></div></section>
+<section class="panel" id="typing"><h3>Typing Test</h3><div class="timer" id="typingTimer">60</div><div class="typing-text" id="typingText">India is a diverse country with many languages, cultures and traditions. Computer Prachi provides useful information, government job updates and online tools for students.</div><div class="field"><label>Type the text above</label><textarea class="typing-input" disabled="" id="typingInput"></textarea></div><button class="btn" id="typingStart" onclick="startTyping()">Start Test</button><div class="result" id="typingResult"></div></section>
+<section class="panel" id="percentage"><h3>Percentage Calculator</h3><div class="join-grid"><div class="field"><label>Obtained Marks</label><input id="pctObt" min="0" type="number"/></div><div class="field"><label>Total Marks</label><input id="pctTotal" min="1" type="number"/></div></div><button class="btn" onclick="calcPercentage()">Calculate</button><div class="result" id="pctResult"></div></section>
+<section class="panel" id="cgpa"><h3>CGPA to Percentage</h3><div class="field"><label>CGPA (10 point scale)</label><input id="cgpaValue" max="10" min="0" step="0.01" type="number"/></div><button class="btn" onclick="calcCgpa()">Convert</button><div class="result" id="cgpaResult"></div><p class="small">Common formula: Percentage = CGPA × 9.5. Check your board/university rules if a different formula is specified.</p></section>
+<section class="panel" id="date-difference"><h3>Date Difference Calculator</h3><div class="join-grid"><div class="field"><label>Start Date</label><input id="dateStart" type="date"/></div><div class="field"><label>End Date</label><input id="dateEnd" type="date"/></div></div><button class="btn" onclick="dateDifference()">Calculate</button><div class="result" id="dateResult"></div></section>
+<section class="panel" id="countdown"><h3>Exam Countdown</h3><div class="field"><label>Exam Date &amp; Time</label><input id="countdownDate" type="datetime-local"/></div><button class="btn" onclick="startCountdown()">Start Countdown</button><div class="result" id="countdownResult"></div></section>
+<section class="panel" id="age"><h3>Age Calculator</h3><div class="field"><label>Date of Birth</label><input id="ageDob" type="date"/></div><button class="btn" onclick="calculateAge()">Calculate Age</button><div class="result" id="ageResult"></div></section>
+<section class="panel" id="photo-name-date"><h3>Name &amp; Date on Photo Maker</h3><div class="field"><label>Select Photo</label><input accept="image/*" id="namePhoto" type="file"/></div><div class="join-grid"><div class="field"><label>Name</label><input id="photoName" placeholder="Your Name"/></div><div class="field"><label>Date</label><input id="photoDate" type="date"/></div></div><button class="btn" onclick="makeNameDatePhoto()">Create &amp; Download</button><div class="canvas-wrap" id="namePhotoOut"></div></section>
+<section class="panel" id="photo-signature"><h3>Photo Signature Joiner</h3><div class="join-grid"><div class="field"><label>Photo</label><input accept="image/*" id="joinPhoto" type="file"/></div><div class="field"><label>Signature</label><input accept="image/*" id="joinSign" type="file"/></div></div><button class="btn" onclick="joinPhotoSignature()">Join &amp; Download</button><div class="canvas-wrap" id="joinOut"></div></section>
 <div class="tool-back"><a class="btn gray" href="index.html">← Back to Computer Prachi</a></div>
 </div>
 <script>

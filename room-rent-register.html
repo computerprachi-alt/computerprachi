@@ -1,8 +1,9 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>🏠 Register Room / Owner — Computer Prachi</title>
 <style>
 :root{--primary:#173b73;--accent:#ff7a00;--bg:#f4f7fb;--card:#fff;--text:#222;--muted:#666;--border:#d8dee8}
@@ -18,7 +19,7 @@ textarea{min-height:110px;resize:vertical}.help{font-size:13px;color:var(--muted
 .btn:disabled{opacity:.65;cursor:not-allowed}
 @media(max-width:650px){.header h1{font-size:21px}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.btn{text-align:center;width:100%}}
 </style>
-</head>
+<meta content="Computer Prachi पर room owner अपनी rental property listing register करने की जानकारी।" name="description"/></head>
 <body>
 <header class="header"><h1>🏠 Register Room / Owner</h1></header>
 <main class="container">
@@ -28,23 +29,23 @@ textarea{min-height:110px;resize:vertical}.help{font-size:13px;color:var(--muted
 <div class="notice" id="statusMessage">यह form room details registration के लिए है। Submit करने के बाद आपका Room ID और verification/availability status यहाँ दिखाई देगा।</div>
 <form id="roomRentForm">
 <div class="form-grid">
-<div class="field"><label for="ownerName">Owner Name</label><input id="ownerName" name="ownerName" type="text"></div>
-<div class="field"><label for="mobile">Mobile Number</label><input id="mobile" name="mobile" type="tel"></div>
-<div class="field"><label for="whatsapp">WhatsApp Number</label><input id="whatsapp" name="whatsapp" type="tel"></div>
-<div class="field"><label for="email">Email</label><input id="email" name="email" type="email"></div>
-<div class="field"><label for="state">State</label><input id="state" name="state" type="text"></div>
-<div class="field"><label for="district">District</label><input id="district" name="district" type="text"></div>
-<div class="field"><label for="city">City</label><input id="city" name="city" type="text"></div>
-<div class="field"><label for="area">Area / Locality</label><input id="area" name="area" type="text"></div>
+<div class="field"><label for="ownerName">Owner Name</label><input id="ownerName" name="ownerName" type="text"/></div>
+<div class="field"><label for="mobile">Mobile Number</label><input id="mobile" name="mobile" type="tel"/></div>
+<div class="field"><label for="whatsapp">WhatsApp Number</label><input id="whatsapp" name="whatsapp" type="tel"/></div>
+<div class="field"><label for="email">Email</label><input id="email" name="email" type="email"/></div>
+<div class="field"><label for="state">State</label><input id="state" name="state" type="text"/></div>
+<div class="field"><label for="district">District</label><input id="district" name="district" type="text"/></div>
+<div class="field"><label for="city">City</label><input id="city" name="city" type="text"/></div>
+<div class="field"><label for="area">Area / Locality</label><input id="area" name="area" type="text"/></div>
 <div class="field"><label for="roomType">Room Type</label><select id="roomType" name="roomType"><option value="">Select Room Type</option><option>Single Room</option><option>1 RK</option><option>1 BHK</option><option>2 BHK</option><option>PG / Paying Guest</option><option>Hostel</option><option>Other</option></select></div>
-<div class="field"><label for="rent">Monthly Rent</label><input id="rent" name="rent" type="number" min="0"></div>
+<div class="field"><label for="rent">Monthly Rent</label><input id="rent" min="0" name="rent" type="number"/></div>
 <div class="field"><label for="availability">Available From</label><select id="availability" name="availability"><option value="">Select Availability</option><option>Vacant</option><option>Available From Date</option></select></div>
-<div class="field"><label for="availableDate">Available From Date</label><input id="availableDate" name="availableDate" type="date"></div>
+<div class="field"><label for="availableDate">Available From Date</label><input id="availableDate" name="availableDate" type="date"/></div>
 <div class="field full"><label for="facilities">Facilities</label><textarea id="facilities" name="facilities" placeholder="e.g. Wi-Fi, attached bathroom, parking"></textarea></div>
 <div class="field full"><label for="description">Room Description</label><textarea id="description" name="description"></textarea></div>
-<div class="field full"><label for="photos">Room Photos</label><input id="photos" name="photos" type="file" accept="image/*" multiple><div class="help">Photos are selected on this device only; their file names are sent with the registration.</div></div>
+<div class="field full"><label for="photos">Room Photos</label><input accept="image/*" id="photos" multiple="" name="photos" type="file"/><div class="help">Photos are selected on this device only; their file names are sent with the registration.</div></div>
 </div>
-<div class="actions"><button id="submitButton" class="btn alt" type="submit">Submit Room Details</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
+<div class="actions"><button class="btn alt" id="submitButton" type="submit">Submit Room Details</button><a class="btn" href="room-rent.html">← Back to Bhagalpur Room Rent</a></div>
 </form>
 </section>
 </main>
