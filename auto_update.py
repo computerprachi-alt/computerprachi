@@ -597,88 +597,53 @@ def extract_job_details(source_url):
             r"fee\s+(?:payment\s+)?last\s+date\s*[:\-]\s*(.+)$"
         ]) or result["last"]
 
-        # Fee lines. Extract each category independently. Many source pages put
-        # several categories on ONE line, e.g. "General/OBC/EWS: ₹100/- For
-        # SC/ST/PH/Female: ₹0/- Payment Mode (Online): ...". Do not let the
-        # first match swallow the following categories or the payment-mode text.
-        def fee_amount(text):
-            m = re.search(r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,]*(?:\.\d{1,2})?)\s*/?-?", text, re.I)
-            return ("₹ " + m.group(1) + "/-") if m else ""
-
-        def set_fee_from_segment(field_names, segment):
-            val = fee_amount(segment)
-            if val:
-                for field in field_names:
-                    result[field] = val
-
+        # Fee lines. Prefer combined category rows, then fall back to individual labels.
         for line in lines:
             low = line.lower()
-            if not ("fee" in low or "application" in low or "general" in low or "payment mode" in low):
+            if not ("fee" in low or "application" in low and "general" in low):
                 continue
-
-            # Keep payment mode separate from all fee values.
-            pm = re.search(r"payment\s+mode(?:\s*\(\s*online\s*\))?\s*[:\-]?\s*(.+)$", line, re.I)
-            if pm:
-                result["feeMode"] = clean(pm.group(1))
-                fee_line = line[:pm.start()].strip(" -:|,;")
-            else:
-                fee_line = line
-
-            # General / OBC / EWS segment.
-            m = re.search(r"(?:general\s*/\s*obc\s*/\s*ews|general\s*/\s*obc|general\s*(?:,|and)\s*obc(?:\s*/\s*ews)?)\s*[:\-]?\s*(.*?)(?=\bfor\s+(?:sc|st|female|women)|\bobc\s*/\s*ews\s*[:\-]|\bsc\s*/|\bst\s*/|$)", fee_line, re.I)
+            m = re.search(r"general\s*/\s*obc\s*(?:/\s*ews)?\s*[:\-]\s*(.+)$", line, re.I)
             if m:
-                set_fee_from_segment(["feeGen", "feeOBC"], m.group(1))
-
-            # A plain General fee, when the source uses a separate row.
-            m = re.search(r"\bgeneral\s*(?:fee)?\s*[:\-]\s*(.*?)(?=\bfor\s+(?:sc|st|female|women)|\bobc\b|\bsc\b|\bst\b|$)", fee_line, re.I)
+                val = clean(m.group(1))
+                result["feeGen"] = val
+                result["feeOBC"] = val
+            # Some sources publish one fee for every category.
+            m = re.search(r"(?:for\s+)?all\s+category(?:\s+candidate(?:s)?)?\s*[:\-]\s*(.+)$", line, re.I)
             if m:
-                set_fee_from_segment(["feeGen"], m.group(1))
-
-            # OBC / EWS separate row.
-            m = re.search(r"\bobc\s*/\s*ews\s*(?:fee)?\s*[:\-]\s*(.*?)(?=\bfor\s+(?:sc|st|female|women)|\bsc\b|\bst\b|$)", fee_line, re.I)
+                val = clean(m.group(1))
+                result["feeGen"] = val
+                result["feeOBC"] = val
+                result["feeSC"] = val
+                result["feeST"] = val
+                result["feeReserved"] = val
+                result["feeFemale"] = val
+            m = re.search(r"(?:sc\s*/\s*st|sc\s*/\s*st\s*/\s*ebc|sc\s*/\s*st\s*/\s*pwd|sc\s*/\s*st\s*/\s*ebc)\s*[:\-]\s*(.+)$", line, re.I)
             if m:
-                set_fee_from_segment(["feeOBC"], m.group(1))
-
-            # Reserved categories may be published together.
-            m = re.search(r"(?:for\s+)?(?:sc\s*[/,]\s*st(?:\s*[/,]\s*(?:ph|pwd|ebc))?(?:\s*(?:[/,]\s*)?(?:female|women))?|sc\s*/\s*st(?:\s*/\s*(?:ph|pwd|ebc))?)\s*[:\-]?\s*(.*?)(?=\bpayment\s+mode|\bfor\s+(?:female|women)|\bfemale\b|\bwomen\b|$)", fee_line, re.I)
+                val = clean(m.group(1))
+                result["feeSC"] = val
+                result["feeST"] = val
+                result["feeReserved"] = val
+            m = re.search(r"(?:all\s+category\s+)?(?:female|women)\s*(?:category)?\s*[:\-]\s*(.+)$", line, re.I)
             if m:
-                set_fee_from_segment(["feeSC", "feeST", "feeReserved"], m.group(1))
-
-            # Female / Women fee, including "For SC/ST/PH Female: ₹0/-".
-            m = re.search(r"(?:for\s+)?(?:female|women)(?:\s+category)?\s*[:\-]?\s*(.*)$", fee_line, re.I)
+                result["feeFemale"] = clean(m.group(1))
+            m = re.search(r"payment\s+mode(?:\s*\(online\))?\s*[:\-]\s*(.+)$", line, re.I)
             if m:
-                set_fee_from_segment(["feeFemale"], m.group(1))
-
-            # One fee for all categories.
-            m = re.search(r"(?:for\s+)?all\s+category(?:\s+candidate(?:s)?)?\s*[:\-]?\s*(.+)$", fee_line, re.I)
-            if m:
-                val = fee_amount(m.group(1))
-                if val:
-                    for field in ("feeGen", "feeOBC", "feeSC", "feeST", "feeReserved", "feeFemale"):
-                        result[field] = val
+                result["feeMode"] = clean(m.group(1))
 
         # Individual-category fallback for sources that use separate table rows.
         for line in lines:
             if result["feeOBC"] == fallback:
                 m = re.search(r"\bobc\b(?:\s*/\s*ews)?\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m:
-                    val = fee_amount(m.group(1)) or clean(m.group(1))
-                    result["feeOBC"] = val
+                if m: result["feeOBC"] = clean(m.group(1))
             if result["feeSC"] == fallback:
                 m = re.search(r"\bsc\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m:
-                    val = fee_amount(m.group(1)) or clean(m.group(1))
-                    result["feeSC"] = val
+                if m: result["feeSC"] = clean(m.group(1))
             if result["feeST"] == fallback:
                 m = re.search(r"\bst\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m:
-                    val = fee_amount(m.group(1)) or clean(m.group(1))
-                    result["feeST"] = val
+                if m: result["feeST"] = clean(m.group(1))
             if result["feeFemale"] == fallback:
                 m = re.search(r"\b(?:female|women)\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m:
-                    val = fee_amount(m.group(1)) or clean(m.group(1))
-                    result["feeFemale"] = val
+                if m: result["feeFemale"] = clean(m.group(1))
 
         # Generic application/exam fee fallback only when category data is absent.
         if result["feeGen"] == fallback:
