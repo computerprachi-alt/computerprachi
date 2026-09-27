@@ -597,66 +597,156 @@ def extract_job_details(source_url):
             r"fee\s+(?:payment\s+)?last\s+date\s*[:\-]\s*(.+)$"
         ]) or result["last"]
 
-        # Fee lines. Prefer combined category rows, then fall back to individual labels.
+        # Fee lines. Source pages frequently place several fee labels on the
+        # same row/line. Parse by label boundaries first, then extract the
+        # amount from each segment. This prevents Payment Mode / next category
+        # text from being swallowed into the previous fee.
+        def fee_amount(text):
+            m = re.search(
+                r"(?:₹|Rs\.?\s*|INR\s*)([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:/-?|/)?",
+                text, re.I
+            )
+            if not m:
+                return ""
+            return "₹ " + m.group(1) + "/-"
+
+        # Known labels mark the end of the preceding value. The expression is
+        # deliberately non-greedy and therefore works for compact source rows
+        # such as: General/OBC/EWS: Rs 100/- SC/ST: Rs 00/- Female: Rs 00/-
+        label_re = re.compile(
+            r"(?P<label>"
+            r"general\s*/\s*obc\s*/\s*ews|"
+            r"general\s*/\s*obc|"
+            r"general|"
+            r"obc\s*/\s*ews|"
+            r"obc|ews|"
+            r"sc\s*/\s*st(?:\s*/\s*(?:ebc|pwd|ph))?|"
+            r"sc|st|ebc|pwd|"
+            r"(?:female|women)(?:\s+category)?|"
+            r"payment\s+mode(?:\s*\(\s*online\s*\))?|"
+            r"(?:application|exam)\s+fee|"
+            r"all\s+category(?:\s+candidate(?:s)?)?"
+            r")"
+            r"\s*[:\-]?\s*",
+            re.I
+        )
+
+        def fee_segments(line):
+            matches = list(label_re.finditer(line))
+            for i, m in enumerate(matches):
+                value_start = m.end()
+                value_end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
+                value = clean(line[value_start:value_end]).strip(" -:|,;")
+                if value:
+                    yield m.group("label").lower(), value
+
         for line in lines:
             low = line.lower()
-            if not ("fee" in low or "application" in low and "general" in low):
+            if not any(x in low for x in (
+                "fee", "general", "obc", "ews", "sc", "st",
+                "female", "women", "payment mode"
+            )):
                 continue
-            m = re.search(r"general\s*/\s*obc\s*(?:/\s*ews)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeGen"] = val
-                result["feeOBC"] = val
-            # Some sources publish one fee for every category.
-            m = re.search(r"(?:for\s+)?all\s+category(?:\s+candidate(?:s)?)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeGen"] = val
-                result["feeOBC"] = val
-                result["feeSC"] = val
-                result["feeST"] = val
-                result["feeReserved"] = val
-                result["feeFemale"] = val
-            m = re.search(r"(?:sc\s*/\s*st|sc\s*/\s*st\s*/\s*ebc|sc\s*/\s*st\s*/\s*pwd|sc\s*/\s*st\s*/\s*ebc)\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeSC"] = val
-                result["feeST"] = val
-                result["feeReserved"] = val
-            m = re.search(r"(?:all\s+category\s+)?(?:female|women)\s*(?:category)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                result["feeFemale"] = clean(m.group(1))
-            m = re.search(r"payment\s+mode(?:\s*\(online\))?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                result["feeMode"] = clean(m.group(1))
 
-        # Individual-category fallback for sources that use separate table rows.
+            for label, value in fee_segments(line):
+                val = fee_amount(value)
+                if label.startswith("general / obc / ews") or label.startswith("general/obc/ews"):
+                    if val:
+                        result["feeGen"] = val
+                        result["feeOBC"] = val
+                elif label.startswith("general / obc") or label.startswith("general/obc"):
+                    if val:
+                        result["feeGen"] = val
+                        result["feeOBC"] = val
+                elif label == "general":
+                    if val:
+                        result["feeGen"] = val
+                elif label.startswith("obc") or label == "ews":
+                    if val:
+                        result["feeOBC"] = val
+                elif label.startswith("sc / st") or label.startswith("sc/st"):
+                    if val:
+                        result["feeSC"] = val
+                        result["feeST"] = val
+                        result["feeReserved"] = val
+                elif label == "sc":
+                    if val:
+                        result["feeSC"] = val
+                elif label == "st":
+                    if val:
+                        result["feeST"] = val
+                elif label in ("ebc", "pwd"):
+                    if val:
+                        result["feeReserved"] = val
+                elif label.startswith("female") or label.startswith("women"):
+                    if val:
+                        result["feeFemale"] = val
+                elif label.startswith("payment mode"):
+                    # Preserve the complete payment instruction, not just an
+                    # amount. This field is intentionally separate from fees.
+                    result["feeMode"] = value
+                elif label.startswith("all category"):
+                    if val:
+                        for field in (
+                            "feeGen", "feeOBC", "feeSC", "feeST",
+                            "feeReserved", "feeFemale"
+                        ):
+                            result[field] = val
+                elif label in ("application fee", "exam fee"):
+                    if result["feeGen"] == fallback and val:
+                        result["feeGen"] = val
+
+        # Some pages put the fee amount in a separate table cell and the label
+        # in another cell. The segment parser above still sees the combined
+        # row text, but these fallbacks cover unusually formatted rows.
         for line in lines:
+            if result["feeGen"] == fallback:
+                m = re.search(r"\bgeneral\b\s*(?:fee)?\s*[:\-]?\s*(.*?)(?=\s+(?:obc|ews|sc|st|female|women|payment\s+mode|$))", line, re.I)
+                if m:
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeGen"] = val
             if result["feeOBC"] == fallback:
-                m = re.search(r"\bobc\b(?:\s*/\s*ews)?\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeOBC"] = clean(m.group(1))
+                m = re.search(r"\bobc(?:\s*/\s*ews)?\b\s*(?:fee)?\s*[:\-]?\s*(.*?)(?=\s+(?:general|sc|st|female|women|payment\s+mode|$))", line, re.I)
+                if m:
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeOBC"] = val
             if result["feeSC"] == fallback:
-                m = re.search(r"\bsc\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeSC"] = clean(m.group(1))
+                m = re.search(r"\bsc\b\s*(?:fee)?\s*[:\-]?\s*(.*?)(?=\s+(?:general|obc|ews|st|female|women|payment\s+mode|$))", line, re.I)
+                if m:
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeSC"] = val
             if result["feeST"] == fallback:
-                m = re.search(r"\bst\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeST"] = clean(m.group(1))
+                m = re.search(r"\bst\b\s*(?:fee)?\s*[:\-]?\s*(.*?)(?=\s+(?:general|obc|ews|sc|female|women|payment\s+mode|$))", line, re.I)
+                if m:
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeST"] = val
             if result["feeFemale"] == fallback:
-                m = re.search(r"\b(?:female|women)\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeFemale"] = clean(m.group(1))
+                m = re.search(r"\b(?:female|women)\b\s*(?:fee)?\s*[:\-]?\s*(.*?)(?=\s+(?:general|obc|ews|sc|st|payment\s+mode|$))", line, re.I)
+                if m:
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeFemale"] = val
 
         # Generic application/exam fee fallback only when category data is absent.
         if result["feeGen"] == fallback:
             for line in lines:
                 m = re.search(r"(?:application|exam)\s+fee\s*[:\-]\s*(.+)$", line, re.I)
                 if m:
-                    result["feeGen"] = clean(m.group(1))
-                    break
+                    val = fee_amount(m.group(1))
+                    if val:
+                        result["feeGen"] = val
+                        break
 
-        # Never leave reserved categories blank when the source gives one combined value.
+        # If a combined reserved-category fee was found, keep SC/ST aligned.
         if result["feeReserved"] != fallback:
-            if result["feeSC"] == fallback: result["feeSC"] = result["feeReserved"]
-            if result["feeST"] == fallback: result["feeST"] = result["feeReserved"]
+            if result["feeSC"] == fallback:
+                result["feeSC"] = result["feeReserved"]
+            if result["feeST"] == fallback:
+                result["feeST"] = result["feeReserved"]
         return result
     except Exception as exc:
         print(f"WARNING: Could not extract job metadata from {source_url}: {exc}")
