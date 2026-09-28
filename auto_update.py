@@ -1151,7 +1151,7 @@ def extract_job_details(source_url):
             r"application\s+fee|exam\s+fee|"
             r"general|gen|obc|ews|sc|st|ebc|pwd|ph|female|women|"
             r"payment\s+mode)"
-            r")|$)",
+            r"|$)",
             re.I,
         )
 
