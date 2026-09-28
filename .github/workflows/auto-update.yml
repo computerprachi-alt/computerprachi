@@ -42,6 +42,11 @@ jobs:
       - name: Fetch and update Jobs / Results / Admit Card + official action links
         run: python auto_update.py
 
+      - name: Validate Latest Jobs generated data
+        run: |
+          python tests/test_fee_parser.py
+          python validate_latest_job_data.py
+
       - name: Commit changed pages
         run: |
           git config user.name "Computer Prachi Auto Update"
