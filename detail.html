@@ -88,7 +88,7 @@
 <div class="cp-search">
 <span class="cp-search-icon">⌕</span>
 <input aria-label="Search" id="siteSearch" placeholder="Search jobs, results, admit card..." type="search"/>
-<button onclick="document.getElementById('siteSearch')?.dispatchEvent(new Event('input'))" type="button">Search</button>
+<button onclick="cpSiteSearch()" type="button">Search</button>
 </div>
 <div class="cp-quick">
 <a href="all-jobs.html">Jobs</a>
@@ -139,22 +139,22 @@ document.getElementById('crumb').textContent=title;
 document.getElementById('post').textContent=title;
 
 const t=title.toLowerCase();
-let category='Latest Update', back='all-latest-update.html', type='Latest Update';
-if(/answer key|answerkey|response sheet/.test(t)){category='Answer Key';back='all-answer-key.html';type='Answer Key';}
-else if(/admit card|hall ticket|exam city|interview letter|pet admit/.test(t)){category='Admit Card';back='all-admit-card.html';type='Admit Card';}
-else if(/result|score card|scorecard|merit list|selection list|certificate/.test(t)){category='Results';back='all-results.html';type='Result / Scorecard';}
-else if(/online form|apply online|recruitment|vacancy|notification/.test(t)){category='Latest Jobs';back='all-jobs.html';type='Recruitment / Job';}
-else if(/syllabus/.test(t)){category='Syllabus';back='all-syllabus.html';type='Syllabus';}
-else if(/admission|gate|stet|phd/.test(t)){category='Admission';back='all-admission.html';type='Admission / Online Form';}
-else if(/iti|apprentice|gds|diploma|safai|group c/.test(t)){category='Diploma / ITI';back='all-iti-jobs.html';type='Diploma / ITI';}
-else if(/document|verification|certificate|aadhar|aadhaar|pan card/.test(t)){category='Document Verification';back='all-documents-verification.html';type='Document Verification';}
-else if(/latest update/.test(t)){category='Latest Update';back='all-latest-update.html';type='Latest Update';}
+let category='Latest Update', backUrl='all-latest-update.html', type='Latest Update';
+if(/answer key|answerkey|response sheet/.test(t)){category='Answer Key';backUrl='all-answer-key.html';type='Answer Key';}
+else if(/admit card|hall ticket|exam city|interview letter|pet admit/.test(t)){category='Admit Card';backUrl='all-admit-card.html';type='Admit Card';}
+else if(/result|score card|scorecard|merit list|selection list|certificate/.test(t)){category='Results';backUrl='all-results.html';type='Result / Scorecard';}
+else if(/online form|apply online|recruitment|vacancy|notification/.test(t)){category='Latest Jobs';backUrl='all-jobs.html';type='Recruitment / Job';}
+else if(/syllabus/.test(t)){category='Syllabus';backUrl='all-syllabus.html';type='Syllabus';}
+else if(/admission|gate|stet|phd/.test(t)){category='Admission';backUrl='all-admission.html';type='Admission / Online Form';}
+else if(/iti|apprentice|gds|diploma|safai|group c/.test(t)){category='Diploma / ITI';backUrl='all-iti-jobs.html';type='Diploma / ITI';}
+else if(/document|verification|certificate|aadhar|aadhaar|pan card/.test(t)){category='Document Verification';backUrl='all-documents-verification.html';type='Document Verification';}
+else if(/latest update/.test(t)){category='Latest Update';backUrl='all-latest-update.html';type='Latest Update';}
 document.getElementById('category').textContent=category;
 document.getElementById('typeLabel').textContent=type;
 const backLinks=document.querySelectorAll('.back');
-backLinks.forEach((e)=>{ if(e.textContent.includes('Back to Category')) e.href=back; else if(e.textContent.includes('View All')) {e.href=back; e.textContent='View All '+category;} });
+backLinks.forEach((e)=>{ if(e.textContent.includes('Back to Category')) e.href=backUrl; else if(e.textContent.includes('View All')) {e.href=backUrl; e.textContent='View All '+category;} });
 document.getElementById('apply').textContent=official?'Open Official Website':'Official Website Not Found'; document.getElementById('apply2').textContent=official?'Open Official Website':'Official Website Not Found'; ['apply','apply2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official)e.href=official; else e.style.display='none'; }}); ['source','source2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official)e.href=official; else e.style.display='none'; }});
-function goSearch(){const q=(document.getElementById('q')?.value||'').trim(); if(q) location.href='index.html?search='+encodeURIComponent(q);}
+function cpSiteSearch(){const q=(document.getElementById('siteSearch')?.value||'').trim();if(!q)return;window.open('https://www.google.com/search?q='+encodeURIComponent(q+' site:computerprachi.online'),'_blank','noopener,noreferrer');}document.getElementById('siteSearch')?.addEventListener('keydown',function(e){if(e.key==='Enter')cpSiteSearch();});
 </script>
 <script id="cp-live-clock-script">
 (function(){

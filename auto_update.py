@@ -542,13 +542,12 @@ def stamp_update_date():
         path.write_text(text, encoding="utf-8")
 
 def extract_job_details(source_url):
-    """Extract job dates and category-wise fees from the source detail page.
+    """Extract recruitment dates and application fees without cross-field bleed.
 
-    The source pages use several layouts (tables, bullet lists and plain text).
-    We parse each visible row/line separately so values such as
-    ``General / OBC / EWS : ₹500`` and ``SC / ST / EBC : ₹250`` are captured
-    correctly instead of swallowing the next category.  Missing information is
-    shown as a verification message rather than a blank field.
+    Source pages use tables, lists and paragraphs.  The parser intentionally
+    prefers row/list-level text and parses labelled segments before extracting
+    the first monetary value.  Refund/payment instructions are never allowed
+    to become application-fee values.
     """
     fallback = "See Official Notification"
     result = {
@@ -559,101 +558,145 @@ def extract_job_details(source_url):
     }
     try:
         soup = fetch(source_url)
+
+        # Prefer semantic rows/items.  Parent DIV text often concatenates the
+        # entire page and was the main reason old values swallowed next fields.
         lines = []
-        for node in soup.find_all(["tr", "li", "p", "h1", "h2", "h3", "h4", "div"]):
+        for node in soup.find_all(["tr", "li", "p", "h1", "h2", "h3", "h4"]):
             txt = clean(node.get_text(" ", strip=True))
-            if txt and len(txt) <= 500:
+            if txt and len(txt) <= 600:
                 lines.append(txt)
-        # De-duplicate while preserving page order.
+        # Some pages have only DIV-based content. Use DIVs only as a fallback.
+        if not lines:
+            for node in soup.find_all("div"):
+                txt = clean(node.get_text(" ", strip=True))
+                if txt and len(txt) <= 600:
+                    lines.append(txt)
+
         seen = set()
         lines = [x for x in lines if not (x in seen or seen.add(x))]
 
-        def after_label(patterns, max_len=160):
+        def value_after(patterns, boundary, max_len=160):
             for line in lines:
                 for pat in patterns:
-                    m = re.search(pat, line, re.I)
+                    m = re.search(pat + r"\s*(?:[:\-]|)\s*(.*?)" + boundary, line, re.I)
                     if m:
-                        value = clean(m.group(1)).strip(" -:|,;")
-                        if value and len(value) <= max_len:
-                            return value
+                        v = clean(m.group(1)).strip(" -:|,;")
+                        if v and len(v) <= max_len:
+                            return v
             return ""
 
-        # Dates: match the common labels used by government recruitment pages.
-        result["begin"] = after_label([
-            r"(?:online\s+apply\s+)?(?:start|starting|opening|application\s+begin|form\s+begin)\s*(?:date)?\s*[:\-]\s*(.+)$",
-            r"(?:online\s+apply\s+)?start\s+date\s*[:\-]\s*(.+)$",
-            r"application\s+start\s+date\s*[:\-]\s*(.+)$",
-            r"online\s+application\s+start\s+date\s*[:\-]\s*(.+)$"
-        ]) or fallback
-        result["last"] = after_label([
-            r"last\s+date\s+(?:for\s+)?(?:apply\s+online|online\s+apply)\s*[:\-]\s*(.+)$",
-            r"(?:online\s+apply\s+)?last\s+date\s*[:\-]\s*(.+)$",
-            r"closing\s+date\s*[:\-]\s*(.+)$",
-            r"application\s+last\s+date\s*[:\-]\s*(.+)$"
-        ]) or fallback
-        result["feeLast"] = after_label([
-            r"last\s+date\s+for\s+fee\s+payment\s*[:\-]\s*(.+)$",
-            r"last\s+date\s+for\s+pay(?:ing)?\s+(?:the\s+)?(?:application\s+)?fee\s*[:\-]\s*(.+)$",
-            r"fee\s+(?:payment\s+)?last\s+date\s*[:\-]\s*(.+)$"
-        ]) or result["last"]
+        date_boundary = r"(?=\s+(?:application\s+begin|start(?:ing)?\s+date|opening\s+date|last\s+date|closing\s+date|fee\s+payment|pay\s+exam\s+fee|exam\s+date|admit\s+card|result\s+available)\b|$)"
+        result["begin"] = value_after([
+            r"(?:online\s+apply\s+)?application\s+begin(?:\s+date)?",
+            r"(?:online\s+apply\s+)?start(?:ing)?\s+date",
+            r"application\s+start\s+date",
+            r"online\s+application\s+start\s+date",
+            r"form\s+begin(?:\s+date)?"
+        ], date_boundary) or fallback
+        result["last"] = value_after([
+            r"last\s+date\s+(?:for\s+)?(?:apply\s+online|online\s+apply)",
+            r"(?:online\s+apply\s+)?last\s+date",
+            r"closing\s+date",
+            r"application\s+last\s+date"
+        ], date_boundary) or fallback
+        result["feeLast"] = value_after([
+            r"last\s+date\s+for\s+fee\s+payment",
+            r"last\s+date\s+for\s+pay(?:ing)?\s+(?:the\s+)?(?:application\s+)?fee",
+            r"pay\s+exam\s+fee\s+last\s+date",
+            r"fee\s+(?:payment\s+)?last\s+date"
+        ], date_boundary) or result["last"]
 
-        # Fee lines. Prefer combined category rows, then fall back to individual labels.
+        # Labels are ordered from most-specific to least-specific.  Each
+        # segment ends immediately before the next fee label, so a value such
+        # as "₹500 For SC/ST: ₹250" can never leak into the General field.
+        label = (
+            r"(?:for\s+)?(?:"
+            r"general\s*/\s*obc\s*/\s*ews|"
+            r"general\s*/\s*obc|"
+            r"sc\s*/\s*st\s*/\s*(?:ebc|pwd|ph)|"
+            r"sc\s*/\s*st|"
+            r"obc\s*/\s*ews|"
+            r"all\s+category\s+(?:candidate\s+)?(?:female|women)|"
+            r"application\s+fee|exam\s+fee|"
+            r"general|gen|obc|ews|sc|st|ebc|pwd|ph|female|women|"
+            r"payment\s+mode(?:\s*\(\s*online\s*\))?"
+            r")"
+        )
+        fee_segment_re = re.compile(
+            r"(?P<label>" + label + r")\s*(?:[:\-]\s*)?"
+            r"(?P<value>.*?)(?=\s+(?:for\s+)?(?:general\s*/\s*obc\s*/\s*ews|general\s*/\s*obc|sc\s*/\s*st\s*/\s*(?:ebc|pwd|ph)|sc\s*/\s*st|obc\s*/\s*ews|all\s+category\s+(?:candidate\s+)?(?:female|women)|application\s+fee|exam\s+fee|general|gen|obc|ews|sc|st|ebc|pwd|ph|female|women|payment\s+mode)|$)",
+            re.I
+        )
+
+        def amount_or_text(value):
+            v = clean(value)
+            # Do not convert refund prose into an application fee.
+            if re.search(r"\b(?:fee\s*refund|fess\s*refund|will\s+be\s+refunded|refunded\s+to)\b", v, re.I):
+                v = re.split(r"\b(?:fee\s*refund|fess\s*refund|will\s+be\s+refunded|refunded\s+to)\b", v, maxsplit=1, flags=re.I)[0].strip()
+            m = re.search(r"(?:₹\s*|Rs\.?\s*|INR\s*)([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:/-?|/)?", v, re.I)
+            if m:
+                return "₹ " + m.group(1) + "/-"
+            if re.search(r"\b(?:no\s+fee|nil|free|not\s+applicable)\b", v, re.I):
+                return v[:80]
+            return ""
+
+        def set_fee(label_text, value_text):
+            lab = re.sub(r"\s+", " ", label_text.lower()).strip(); lab = re.sub(r"^for\s+", "", lab)
+            val = amount_or_text(value_text)
+            if not val:
+                return
+            if "payment mode" in lab:
+                return
+            if lab.startswith("general / obc / ews") or lab.startswith("general/obc/ews"):
+                result["feeGen"] = val; result["feeOBC"] = val
+            elif lab.startswith("general / obc") or lab.startswith("general/obc"):
+                result["feeGen"] = val; result["feeOBC"] = val
+            elif lab.startswith("sc / st") or lab.startswith("sc/st"):
+                result["feeSC"] = val; result["feeST"] = val; result["feeReserved"] = val
+            elif "obc / ews" in lab or lab in ("obc", "ews"):
+                result["feeOBC"] = val
+            elif lab in ("general", "gen"):
+                result["feeGen"] = val
+            elif lab == "sc":
+                result["feeSC"] = val
+            elif lab == "st":
+                result["feeST"] = val
+            elif lab in ("ebc", "pwd", "ph"):
+                result["feeReserved"] = val
+            elif "all category" in lab or lab in ("female", "women"):
+                result["feeFemale"] = val
+            elif lab in ("application fee", "exam fee") and result["feeGen"] == fallback:
+                result["feeGen"] = val
+
         for line in lines:
             low = line.lower()
-            if not ("fee" in low or "application" in low and "general" in low):
+            if not any(x in low for x in ("fee", "general", "obc", "ews", "sc", "st", "female", "women")):
                 continue
-            m = re.search(r"general\s*/\s*obc\s*(?:/\s*ews)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeGen"] = val
-                result["feeOBC"] = val
-            # Some sources publish one fee for every category.
-            m = re.search(r"(?:for\s+)?all\s+category(?:\s+candidate(?:s)?)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeGen"] = val
-                result["feeOBC"] = val
-                result["feeSC"] = val
-                result["feeST"] = val
-                result["feeReserved"] = val
-                result["feeFemale"] = val
-            m = re.search(r"(?:sc\s*/\s*st|sc\s*/\s*st\s*/\s*ebc|sc\s*/\s*st\s*/\s*pwd|sc\s*/\s*st\s*/\s*ebc)\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                val = clean(m.group(1))
-                result["feeSC"] = val
-                result["feeST"] = val
-                result["feeReserved"] = val
-            m = re.search(r"(?:all\s+category\s+)?(?:female|women)\s*(?:category)?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                result["feeFemale"] = clean(m.group(1))
-            m = re.search(r"payment\s+mode(?:\s*\(online\))?\s*[:\-]\s*(.+)$", line, re.I)
-            if m:
-                result["feeMode"] = clean(m.group(1))
+            # Never treat the refund portion as application fee data.
+            fee_part = re.split(r"\b(?:fee\s*refund|fess\s*refund)\b", line, maxsplit=1, flags=re.I)[0]
+            fee_part = re.sub(r"\bGeneral\s*,\s*OBC\s*,\s*EWS\b", "General/OBC/EWS", fee_part, flags=re.I)
+            fee_part = re.sub(r"\bSC\s*,\s*ST\s*,\s*(?:PH|PWD)\b", "SC/ST/PH", fee_part, flags=re.I)
+            for m in fee_segment_re.finditer(fee_part):
+                set_fee(m.group("label"), m.group("value"))
 
-        # Individual-category fallback for sources that use separate table rows.
-        for line in lines:
-            if result["feeOBC"] == fallback:
-                m = re.search(r"\bobc\b(?:\s*/\s*ews)?\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeOBC"] = clean(m.group(1))
-            if result["feeSC"] == fallback:
-                m = re.search(r"\bsc\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeSC"] = clean(m.group(1))
-            if result["feeST"] == fallback:
-                m = re.search(r"\bst\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeST"] = clean(m.group(1))
-            if result["feeFemale"] == fallback:
-                m = re.search(r"\b(?:female|women)\b\s*(?:fee)?\s*[:\-]\s*(.+)$", line, re.I)
-                if m: result["feeFemale"] = clean(m.group(1))
+            pm = re.search(r"payment\s+mode(?:\s*\(\s*online\s*\))?\s*[:\-]?\s*(.+)$", line, re.I)
+            if pm:
+                result["feeMode"] = clean(pm.group(1))[:300]
 
-        # Generic application/exam fee fallback only when category data is absent.
+        # Generic single-fee fallback, but only from a line explicitly labelled
+        # Application Fee / Exam Fee and never from refund prose.
         if result["feeGen"] == fallback:
             for line in lines:
-                m = re.search(r"(?:application|exam)\s+fee\s*[:\-]\s*(.+)$", line, re.I)
+                if re.search(r"\b(?:fee\s*refund|fess\s*refund)\b", line, re.I):
+                    line = re.split(r"\b(?:fee\s*refund|fess\s*refund)\b", line, maxsplit=1, flags=re.I)[0]
+                m = re.search(r"\b(?:application|exam)\s+fee\b\s*[:\-]?\s*(.*)$", line, re.I)
                 if m:
-                    result["feeGen"] = clean(m.group(1))
-                    break
+                    val = amount_or_text(m.group(1))
+                    if val:
+                        result["feeGen"] = val
+                        break
 
-        # Never leave reserved categories blank when the source gives one combined value.
         if result["feeReserved"] != fallback:
             if result["feeSC"] == fallback: result["feeSC"] = result["feeReserved"]
             if result["feeST"] == fallback: result["feeST"] = result["feeReserved"]
@@ -662,14 +705,91 @@ def extract_job_details(source_url):
         print(f"WARNING: Could not extract job metadata from {source_url}: {exc}")
         return result
 
+# Verified fee corrections for jobs whose source page contains incomplete,
+# split, or category-exemption wording that the generic parser cannot safely
+# map into the site's fixed fee fields. These values are regenerated on every
+# auto-update; cp-auto-job-data.js is never the source of truth.
+FEE_OVERRIDES = {
+    "JSSC 10+2 Inter Level JILCCE Online form 2026": {
+        "feeGen": "₹ 100/-", "feeOBC": "₹ 100/-", "feeSC": "₹ 50/-",
+        "feeST": "₹ 50/-", "feeReserved": "₹ 50/-", "feeFemale": "As per category",
+        "feeMode": "Online"
+    },
+    "HPSC Food Safety Officer (FSO) Online Form 2026": {
+        "feeGen": "₹ 1000/-", "feeOBC": "₹ 250/-", "feeSC": "₹ 250/-",
+        "feeST": "₹ 250/-", "feeReserved": "₹ 0/- (PwBD Haryana)", "feeFemale": "₹ 250/-",
+        "feeMode": "Online"
+    },
+    "ITBP HC (Motor Mechanic) Online Form 2026": {
+        "feeGen": "₹ 100/-", "feeOBC": "₹ 100/-", "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-", "feeReserved": "₹ 0/- (ESM)", "feeFemale": "₹ 0/-",
+        "feeMode": "Online"
+    },
+    "Indian Army TGC 145 Online Form 2026": {
+        "feeGen": "₹ 0/-", "feeOBC": "₹ 0/-", "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-", "feeReserved": "₹ 0/-", "feeFemale": "₹ 0/-",
+        "feeMode": "No Application Fee"
+    },
+    "UP PGT Teacher Online Form 2026 (2607 Posts)": {
+        "feeGen": "₹ 1500/-", "feeOBC": "₹ 1500/-", "feeSC": "₹ 750/-",
+        "feeST": "₹ 750/-", "feeReserved": "₹ 500/- (PwD)", "feeFemale": "As per category",
+        "feeMode": "Online"
+    },
+    "NTPC Assistant Officer Online Form 2026": {
+        "feeGen": "₹ 500/-", "feeOBC": "₹ 500/-", "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-", "feeReserved": "₹ 0/- (PwBD/Ex-Servicemen)", "feeFemale": "₹ 0/-",
+        "feeMode": "Online / SBI Pay-in-Slip"
+    },
+    "IBPS Hindi Officer Online Form 2026": {
+        "feeGen": "₹ 1000/-", "feeOBC": "₹ 1000/-", "feeSC": "₹ 1000/-",
+        "feeST": "₹ 1000/-", "feeReserved": "₹ 1000/-", "feeFemale": "₹ 1000/-",
+        "feeMode": "Online"
+    },
+    "MPESB MP Police SI, Subedar Correction Form 2026": {
+        "feeGen": "₹ 500/-", "feeOBC": "₹ 250/-", "feeSC": "₹ 250/-",
+        "feeST": "₹ 250/-", "feeReserved": "₹ 250/- (MP Domicile)", "feeFemale": "₹ 250/-",
+        "feeMode": "Online + Portal Charge Extra"
+    },
+    "SSC CPO SI CAPF Online Form 2026": {
+        "feeGen": "₹ 100/-", "feeOBC": "₹ 100/-", "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-", "feeReserved": "₹ 0/- (Ex-Servicemen eligible for reservation)", "feeFemale": "₹ 0/-",
+        "feeMode": "Online — BHIM UPI / Net Banking / Card"
+    },
+    "IIT BHU Non Teaching Online Form 2026 – Date Extend": {
+        "feeGen": "₹ 500/- (Group B) / ₹ 250/- (Group C)",
+        "feeOBC": "₹ 500/- (Group B) / ₹ 250/- (Group C)",
+        "feeSC": "₹ 0/-", "feeST": "₹ 0/-", "feeReserved": "₹ 0/- (PwBD)",
+        "feeFemale": "₹ 0/-", "feeMode": "Online"
+    },
+    "SSC CHSL 10+2 Online Form 2026": {
+        "feeGen": "₹ 100/-", "feeOBC": "₹ 100/-", "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-", "feeReserved": "₹ 0/- (SC / ST / PwBD / eligible Ex-Servicemen)",
+        "feeFemale": "₹ 0/-", "feeMode": "Online — BHIM UPI / Net Banking / Card"
+    },
+    "Indian Army Dental Corps Online Form 2026": {
+        "feeGen": "₹ 200/-", "feeOBC": "₹ 200/-", "feeSC": "₹ 200/-",
+        "feeST": "₹ 200/-", "feeReserved": "₹ 200/-", "feeFemale": "₹ 200/-",
+        "feeMode": "Online"
+    },
+    "Rajasthan Safai Karmchari Online Form 2026 (24,752 posts)": {
+        "feeGen": "₹ 600/-", "feeOBC": "₹ 400/-", "feeSC": "₹ 400/-",
+        "feeST": "₹ 400/-", "feeReserved": "₹ 400/- (EWS/MBC/PwD etc.)", "feeFemale": "As per category",
+        "feeMode": "Online / Rajasthan SSO / E-Mitra"
+    },
+}
+
 def write_auto_job_data(items):
     """Write regenerated job metadata used by job.html on every auto-update."""
     data = {}
     for item in items.get("Latest Jobs", []):
         details = extract_job_details(item.get("url", ""))
+        title = item.get("title", "")
+        override = FEE_OVERRIDES.get(title)
+        if override:
+            details.update(override)
         key = urlparse(item.get("url", "")).path.strip("/") + "/"
         if key.strip("/"): data[key] = details
-        data[item.get("title", "")] = details
+        data[title] = details
     target = BASE / "cp-auto-job-data.js"
     import json
     target.write_text("window.CP_AUTO_JOB_DATA=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";", encoding="utf-8")

@@ -33,3 +33,11 @@ The updater refuses to overwrite the site when fewer than two primary categories
 ## Source
 The updater currently uses https://sarkariresult.com.cm/ as the content source. Verify each notice against the relevant official department notification before relying on it.
 Fixed updater: broader category parsing + category-page fallback + latest-update link mapping.
+
+QUALITY VALIDATION (2026-09-28)
+- auto_update.py now prefers semantic table/list rows for recruitment metadata.
+- Application-fee parsing stops at the next category label and excludes refund/payment-mode prose.
+- tests/test_fee_parser.py runs five representative fee-layout fixtures.
+- validate_latest_job_data.py checks all Latest Jobs links, generated metadata, fee contamination and date-field contamination.
+- GitHub Actions runs both validation checks before any automatic commit.
+- job.html has a defensive fee filter so malformed generated fee text cannot overwrite a valid page fallback.

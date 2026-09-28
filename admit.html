@@ -88,7 +88,7 @@
 <div class="cp-search">
 <span class="cp-search-icon">⌕</span>
 <input aria-label="Search" id="siteSearch" placeholder="Search jobs, results, admit card..." type="search"/>
-<button onclick="document.getElementById('siteSearch')?.dispatchEvent(new Event('input'))" type="button">Search</button>
+<button onclick="cpSiteSearch()" type="button">Search</button>
 </div>
 <div class="cp-quick">
 <a href="all-jobs.html">Jobs</a>
@@ -125,7 +125,7 @@ document.getElementById('title').textContent=title;
 document.getElementById('crumb').textContent=title;
 document.getElementById('post').textContent=title;
 ['apply','apply2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official){e.href=official; e.onclick=function(ev){ev.stopPropagation();};} else e.style.display='none'; }}); ['source','source2'].forEach(id=>{const e=document.getElementById(id); if(e){ if(official)e.href=official; else e.style.display='none'; }});
-function goSearch(){const q=(document.getElementById('q')?.value||'').trim(); if(q) location.href='index.html?search='+encodeURIComponent(q);}
+function cpSiteSearch(){const q=(document.getElementById('siteSearch')?.value||'').trim();if(!q)return;window.open('https://www.google.com/search?q='+encodeURIComponent(q+' site:computerprachi.online'),'_blank','noopener,noreferrer');}document.getElementById('siteSearch')?.addEventListener('keydown',function(e){if(e.key==='Enter')cpSiteSearch();});
 </script>
 <script id="cp-live-clock-script">
 (function(){
