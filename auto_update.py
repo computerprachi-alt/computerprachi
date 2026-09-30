@@ -1400,6 +1400,12 @@ def extract_job_details(source_url):
 #
 FEE_OVERRIDES = {
 
+    "Bank of India BOI SO Online Form 2026 – Date Extend": {
+        "feeGen": "₹ 1180/-", "feeOBC": "₹ 1180/-", "feeSC": "₹ 175/-",
+        "feeST": "₹ 175/-", "feeReserved": "₹ 175/-",
+        "feeFemale": "₹ 1180/-", "feeMode": "Online"
+    },
+
     "JSSC 10+2 Inter Level JILCCE Online form 2026": {
         "feeGen": "₹ 100/-",
         "feeOBC": "₹ 100/-",
@@ -1533,6 +1539,36 @@ FEE_OVERRIDES = {
     # --------------------------------------------------------
     # NEW VERIFIED PERMANENT CORRECTIONS
     # --------------------------------------------------------
+
+    "BPSC School Teacher TRE 4.0 Online Form 2026 (33,320 Posts)": {
+        "feeGen": "₹ 100/-",
+        "feeOBC": "₹ 100/-",
+        "feeSC": "₹ 100/-",
+        "feeST": "₹ 100/-",
+        "feeReserved": "₹ 100/-",
+        "feeFemale": "₹ 100/-",
+        "feeMode": "Online",
+    },
+
+    "JSSC Para Teacher JTAACCE Online form 2026 (7299 Posts) – Start": {
+        "feeGen": "₹ 100/-",
+        "feeOBC": "₹ 100/-",
+        "feeSC": "₹ 50/-",
+        "feeST": "₹ 50/-",
+        "feeReserved": "₹ 50/- (Jharkhand SC/ST)",
+        "feeFemale": "As per category",
+        "feeMode": "Online",
+    },
+
+    "Assam Rifles Technical / Tradesman Online Form 2026": {
+        "feeGen": "₹ 100/-",
+        "feeOBC": "₹ 100/-",
+        "feeSC": "₹ 0/-",
+        "feeST": "₹ 0/-",
+        "feeReserved": "₹ 0/- (Ex-Servicemen)",
+        "feeFemale": "Not Eligible",
+        "feeMode": "Online / SBI Challan",
+    },
 
     "BPSC School Teacher TRE 4.0 Online Form 2026 (32,388 Posts)": {
         "feeGen": "₹ 100/-",
