@@ -997,6 +997,8 @@ def extract_job_details(source_url):
         "feeReserved": fallback,
         "feeFemale": fallback,
         "feeMode": fallback,
+        "ageLimit": fallback,
+        "totalPost": fallback,
     }
 
     try:
@@ -1050,6 +1052,469 @@ def extract_job_details(source_url):
                 or seen.add(x)
             )
         ]
+
+        # --------------------------------------------------------
+        # Generic Age Limit / Total Vacancy extraction
+        # --------------------------------------------------------
+        # Only keep the actual age statements.  Do not copy a whole
+        # introductory paragraph just because it mentions "Age Limit".
+        fallback = "See Official Notification"
+
+        age_number_re = re.compile(
+            r"\b\d{1,3}\s*(?:-|–|—|to)\s*\d{1,3}\s*(?:years?|yrs?)\b"
+            r"|\b\d{1,3}\s*(?:years?|yrs?)\b",
+            re.I,
+        )
+
+        # Extract only explicit age clauses.  The parser must not copy a
+        # whole paragraph merely because it contains the words "age limit".
+        age_clause_re = re.compile(
+            r"(?P<kind>minimum|maximum)\s+age(?:\s+limit)?"
+            r"\s*(?:required|is|of|:|-)?\s*"
+            r"(?P<value>\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s*"
+            r"(?:years?|yrs?)?"
+            r"(?P<tail>[^|.;]{0,140})",
+            re.I,
+        )
+
+        # Handles compact forms such as "Age Limit : 22 – 32 Years".
+        age_limit_re = re.compile(
+            r"\bage\s+limit\s*[:\-]\s*"
+            r"(?P<value>\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s*"
+            r"(?:years?|yrs?)?"
+            r"(?P<tail>[^|.;]{0,140})",
+            re.I,
+        )
+
+        # Category/sex-specific clauses such as BPSC's UR-Male/SC-ST-Female.
+        category_age_re = re.compile(
+            r"(?P<kind>minimum|maximum)\s+age\s*[:\-]\s*"
+            r"(?P<value>\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s*"
+            r"(?:years?|yrs?)?\s*"
+            r"(?P<group>\([^|.;]{0,140}\))",
+            re.I,
+        )
+
+        def _clean_age_tail(tail):
+            tail = clean(tail).strip(" -:,;")
+
+            # Discard truncated date fragments such as "as on 01" / "as on 27".
+            if re.search(
+                r"\bas\s+(?:on|of)\s+\d{1,2}(?:\s*[/-]\s*\d{1,2})?\s*$",
+                tail,
+                re.I,
+            ):
+                return ""
+
+            # Preserve a complete date reference only.
+            date_m = re.search(
+                r"\bas\s+(?:on|of)\s+"
+                r"(?:\d{1,2}(?:st|nd|rd|th)?\s+)?"
+                r"(?:[A-Za-z]{3,9}\s+)?\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"
+                r"|\bas\s+(?:on|of)\s+\d{1,2}\s+"
+                r"(?:[A-Za-z]{3,9}|\d{1,2})\s+\d{4}\b",
+                tail,
+                re.I,
+            )
+            if date_m:
+                return clean(date_m.group(0))
+
+            # Keep complete parenthetical qualifiers such as:
+            # (UR-Male), (Class 9 to 10), (For Graduate Apprentice).
+            paren = re.match(r"^(\([^|.;]{1,140}\))", tail)
+            if paren:
+                return clean(paren.group(1))
+
+            if re.fullmatch(r"(?:post\s+wise|category\s+wise)", tail, re.I):
+                return clean(tail)
+
+            return ""
+
+        def age_fragments(line):
+            parts = re.split(
+                r"\s*\|\s*|\s+(?=[A-Z][^|]{0,120}\.)",
+                line,
+            )
+            out = []
+
+            for part in parts:
+                part = clean(part).strip(" -:;")
+                if not part:
+                    continue
+
+                # Recruitment age values below 14 are not valid job-age
+                # matches and usually come from unrelated source numbers.
+                numeric_ages = [
+                    int(x)
+                    for x in re.findall(
+                        r"\b(\d{1,3})\s*(?:years?|yrs?)\b",
+                        part,
+                        re.I,
+                    )
+                ]
+                if numeric_ages and max(numeric_ages) < 14:
+                    continue
+
+                # Explicit category/class/sex clauses.
+                for m in category_age_re.finditer(part):
+                    clause = (
+                        f"{m.group('kind').title()} Age : "
+                        f"{m.group('value')} Years "
+                        f"{clean(m.group('group'))}"
+                    )
+                    if clause not in out:
+                        out.append(clause)
+
+                # Detect a coherent minimum+maximum pair first.  Some source
+                # pages repeat a stray maximum-age number in the same sentence
+                # (often from an FAQ/summary).  When one sentence contains an
+                # explicit minimum/maximum pair, that pair is the authoritative
+                # age statement for that sentence, so do not let a second bare
+                # maximum overwrite it.
+                pair = re.search(
+                    r"minimum\s+age(?:\s+limit)?\s*"
+                    r"(?:required\s+is|is|of|:|-)?\s*"
+                    r"(\d{1,3})\s*(?:years?|yrs?)?\s*"
+                    r"(?:,|;|and|&)\s*"
+                    r"(?:the\s+)?maximum\s+age(?:\s+limit)?\s*"
+                    r"(?:required\s+is|is|of|:|-)?\s*"
+                    r"(\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s*"
+                    r"(?:years?|yrs?)?",
+                    part,
+                    re.I,
+                )
+
+                if pair:
+                    min_clause = f"Minimum Age : {pair.group(1)} Years"
+                    max_clause = f"Maximum Age : {pair.group(2)} Years"
+                    if min_clause not in out:
+                        out.append(min_clause)
+                    if max_clause not in out:
+                        out.append(max_clause)
+                else:
+                    # Ordinary minimum/maximum clauses.
+                    for m in age_clause_re.finditer(part):
+                        value = m.group("value")
+                        tail = _clean_age_tail(m.group("tail"))
+                        clause = f"{m.group('kind').title()} Age : {value} Years"
+                        if tail:
+                            clause += f" {tail}"
+                        if clause not in out:
+                            out.append(clause)
+
+                # Compact "Age Limit : 22 – 32 Years (Post/Role)" wording.
+                for m in age_limit_re.finditer(part):
+                    value = m.group("value")
+                    tail = _clean_age_tail(m.group("tail"))
+                    clause = f"Age Limit : {value} Years"
+                    if tail:
+                        clause += f" {tail}"
+                    if clause not in out:
+                        out.append(clause)
+
+            return out
+
+        # Prefer age statements from the actual Age Limit section and the
+        # nearby lines of that section. Do not use a hard-coded vacancy name.
+        # This avoids FAQ/repeated-summary values (for example a stray 25)
+        # while still preserving valid minimum/maximum values that are split
+        # across adjacent source lines.
+        age_hits = []
+        age_scored = []
+
+        # Build age-section anchors generically. A source page may repeat
+        # "Age Limit" in summaries, FAQs and keyword blocks with conflicting
+        # values. Prefer the occurrence that is followed by the actual
+        # minimum/maximum age statements, rather than treating every repeated
+        # heading as equally authoritative. This is source-structure based,
+        # not vacancy-specific.
+        age_heading_candidates = [
+            i for i, line in enumerate(lines)
+            if re.search(r"\bage\s+limit\b", line, re.I)
+        ]
+
+        def _age_heading_penalty(text):
+            return bool(re.search(
+                r"\b(?:faq|question|answer|trending|keyword|short\s+information|summary)\b",
+                text,
+                re.I,
+            ))
+
+        age_anchor_scores = []
+        for anchor in age_heading_candidates:
+            window = " | ".join(
+                clean(x) for x in lines[anchor:anchor + 7] if clean(x)
+            )
+            minimum_hits = len(re.findall(r"\bminimum\s+age\b", window, re.I))
+            maximum_hits = len(re.findall(r"\bmaximum\s+age\b", window, re.I))
+            range_hits = len(re.findall(
+                r"\b\d{1,3}\s*(?:-|–|—|to)\s*\d{1,3}\s*(?:years?|yrs?)\b",
+                window,
+                re.I,
+            ))
+            pair_evidence = min(minimum_hits, maximum_hits)
+            penalty = 1000 if _age_heading_penalty(lines[anchor]) else 0
+            # Explicit min+max evidence is stronger than a lone range or a
+            # repeated FAQ heading. Earlier canonical sections win ties.
+            anchor_score = (pair_evidence * 100) + (range_hits * 20) - penalty
+            age_anchor_scores.append((anchor_score, -anchor, anchor))
+
+        if age_anchor_scores:
+            best_anchor_score = max(score for score, _neg_idx, _idx in age_anchor_scores)
+            age_section_indexes = [
+                idx for score, _neg_idx, idx in age_anchor_scores
+                if score == best_anchor_score
+            ]
+        else:
+            age_section_indexes = []
+
+        for i, line in enumerate(lines):
+            hits = age_fragments(line)
+            if not hits:
+                continue
+
+            if age_section_indexes:
+                distance = min(abs(i - j) for j in age_section_indexes)
+                proximity_score = max(0, 900 - (distance * 100))
+            else:
+                proximity_score = 0
+
+            for h in hits:
+                qualified = bool(re.search(
+                    r"\b(?:\(|for\s+post|post\s+wise|category\s+wise|class\s+|ur[-/ ]|obc|ews|sc|st|pwd|pwbd|female|male)\b",
+                    h,
+                    re.I,
+                ))
+                score = proximity_score + (50 if qualified else 0)
+                age_hits.append(h)
+                age_scored.append((h, score, qualified, i))
+
+        if age_hits:
+            # De-duplicate while retaining the strongest source position.
+            best = {}
+            for h, score, qualified, idx in age_scored:
+                if h not in best or score > best[h][0]:
+                    best[h] = (score, qualified, idx)
+
+            # Qualified/category/post-wise conditions are independently valid
+            # and must all survive. For bare minimum/maximum values, keep the
+            # strongest source value for each kind. This removes duplicated
+            # FAQ/summary values without guessing between equally supported
+            # values.
+            selected = []
+            bare_best = {}
+            for h, (score, qualified, idx) in best.items():
+                if qualified:
+                    selected.append((score, idx, h))
+                    continue
+
+                m = re.search(
+                    r"\b(minimum|maximum)\s+age\s*:\s*",
+                    h,
+                    re.I,
+                )
+                if m:
+                    kind = m.group(1).lower()
+                    current = bare_best.get(kind)
+                    if current is None or score > current[0]:
+                        bare_best[kind] = (score, idx, h)
+                else:
+                    selected.append((score, idx, h))
+
+            selected.extend(
+                (score, idx, h)
+                for score, idx, h in bare_best.values()
+            )
+            selected.sort(key=lambda x: (-x[0], x[1]))
+            age_hits = [h for _score, _idx, h in selected]
+
+        if age_hits:
+            # Exact duplicate removal first.
+            age_hits = list(dict.fromkeys(age_hits))
+
+            # If the same kind/value appears with a complete qualifier
+            # (category, class, sex, post/role), suppress only the unqualified
+            # copy.  Different values are NOT reconciled or guessed.
+            qualified_keys = set()
+            for clause in age_hits:
+                m = re.search(
+                    r"\b(minimum|maximum)\s+age\s*:\s*"
+                    r"(\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s+years\b",
+                    clause,
+                    re.I,
+                )
+                if not m:
+                    continue
+
+                tail = clause[m.end():].strip()
+                if tail:
+                    qualified_keys.add(
+                        (
+                            m.group(1).lower(),
+                            re.sub(r"\s+", " ", m.group(2).strip()),
+                        )
+                    )
+
+            filtered = []
+            parsed_age_clauses = []
+
+            for clause in age_hits:
+                m = re.search(
+                    r"\b(minimum|maximum)\s+age\s*:\s*"
+                    r"(\d{1,3}(?:\s*(?:-|–|—|to)\s*\d{1,3})?)\s+years\b",
+                    clause,
+                    re.I,
+                )
+                if not m:
+                    if clause not in filtered:
+                        filtered.append(clause)
+                    continue
+
+                kind = m.group(1).lower()
+                value_text = re.sub(r"\s+", " ", m.group(2).strip())
+                tail = clause[m.end():].strip()
+
+                # Reject isolated/unrelated tiny numbers such as
+                # "Maximum Age : 3 Years".  A valid job-age minimum can
+                # be as low as 14, so 14 remains allowed.
+                nums = [int(x) for x in re.findall(r"\d{1,3}", value_text)]
+                if nums and any(n < 14 for n in nums):
+                    continue
+
+                parsed_age_clauses.append((clause, kind, value_text, tail))
+
+            # Generic cleanup for a common source duplication pattern:
+            # a range such as "30 - 35 Years" followed by a bare
+            # "Maximum Age : 30 Years".  When the bare value is exactly
+            # an endpoint of an already-present range of the same kind,
+            # treat it as a repeated extraction of the same condition.
+            # This does NOT remove genuinely different values such as
+            # 28 vs 25, and does not alter post-wise/qualified clauses.
+            range_endpoints = {"minimum": set(), "maximum": set()}
+            for _clause, kind, value_text, tail in parsed_age_clauses:
+                if tail:
+                    continue
+                nums = [int(x) for x in re.findall(r"\d{1,3}", value_text)]
+                if len(nums) == 2:
+                    range_endpoints[kind].update(nums)
+
+            cleaned_parsed = []
+            for clause, kind, value_text, tail in parsed_age_clauses:
+                if not tail:
+                    nums = [int(x) for x in re.findall(r"\d{1,3}", value_text)]
+                    if len(nums) == 1 and nums[0] in range_endpoints[kind]:
+                        has_range = any(
+                            len(re.findall(r"\d{1,3}", other_value)) == 2
+                            and nums[0] in [int(x) for x in re.findall(r"\d{1,3}", other_value)]
+                            for _other_clause, other_kind, other_value, other_tail in parsed_age_clauses
+                            if other_kind == kind and not other_tail
+                        )
+                        if has_range:
+                            continue
+                cleaned_parsed.append((clause, kind, value_text, tail))
+
+            parsed_age_clauses = cleaned_parsed
+
+            # If an unqualified range is fully represented by qualified
+            # endpoint values, keep the specific source statements and
+            # drop only the redundant broad range.  Do not reconcile
+            # genuinely different values (for example 28 vs 25).
+            qualified_values = {
+                "minimum": set(),
+                "maximum": set(),
+            }
+            for _clause, kind, value_text, tail in parsed_age_clauses:
+                if not tail:
+                    continue
+                nums = [int(x) for x in re.findall(r"\d{1,3}", value_text)]
+                if len(nums) == 1:
+                    qualified_values[kind].add(nums[0])
+
+            for clause, kind, value_text, tail in parsed_age_clauses:
+                if not tail:
+                    nums = [int(x) for x in re.findall(r"\d{1,3}", value_text)]
+                    if len(nums) == 2 and all(
+                        n in qualified_values[kind] for n in nums
+                    ):
+                        continue
+
+                    key = (kind, value_text)
+                    if key in qualified_keys:
+                        continue
+
+                if clause not in filtered:
+                    filtered.append(clause)
+
+            result["ageLimit"] = " | ".join(filtered)[:900] or fallback
+
+        # Strong vacancy/post patterns.  Prefer explicit totals and
+        # "recruitment is for X positions" over unrelated numbers.
+        total_patterns = [
+            r"\btotal\s+(?:number\s+of\s+)?posts?\b",
+            r"\btotal\s+(?:number\s+of\s+)?vacanc(?:y|ies)\b",
+            r"\bnumber\s+of\s+posts?\b",
+            r"\bno\.?\s*of\s+posts?\b",
+            r"\bno\.?\s*of\s+vacanc(?:y|ies)\b",
+            r"\bvacanc(?:y|ies)\s+details?\b",
+            r"\brecruitment\s+is\s+for\b",
+            r"\b(?:recruitment|notification|advertisement)\b[^.]{0,80}"
+            r"\b\d[\d,]*\s+(?:posts?|vacanc(?:y|ies)|positions)\b",
+        ]
+
+        total_value_re = re.compile(
+            r"(?<!\d)(\d[\d,]*)\s*"
+            r"(?:posts?|vacanc(?:y|ies)|positions?)\b",
+            re.I,
+        )
+
+        total_after_re = re.compile(
+            r"\b(?:recruitment|notification|advertisement)\b[^.]{0,120}?"
+            r"\b(?:for|of)\s+(\d[\d,]*)\s+"
+            r"(?:posts?|vacanc(?:y|ies)|positions?)\b",
+            re.I,
+        )
+
+        for line in lines:
+            if not any(re.search(pat, line, re.I) for pat in total_patterns):
+                continue
+
+            # Ignore obvious date/fee/exam metadata.
+            if re.search(
+                r"\b(?:last\s+date|start\s+date|application\s+fee|"
+                r"exam\s+date|admit\s+card|result|age\s+limit)\b",
+                line,
+                re.I,
+            ):
+                continue
+
+            m = total_value_re.search(line)
+            if not m:
+                m = total_after_re.search(line)
+
+            if m:
+                number = m.group(1).replace(",", "")
+                # Reject years and implausibly short date-like values.
+                if len(number) == 4 and 1900 <= int(number) <= 2099:
+                    continue
+
+                formatted = f"{int(number):,} Posts"
+                result["totalPost"] = formatted
+                break
+
+        # As a final safe fallback, accept a title/source line containing
+        # "(1100 Posts)" or "(33,320 Posts)" when no explicit total was found.
+        if result["totalPost"] == fallback:
+            title_post_re = re.compile(
+                r"\(\s*(\d[\d,]*)\s+posts?\s*\)",
+                re.I,
+            )
+            for line in lines[:40]:
+                m = title_post_re.search(line)
+                if m:
+                    number = m.group(1).replace(",", "")
+                    if not (len(number) == 4 and 1900 <= int(number) <= 2099):
+                        result["totalPost"] = f"{int(number):,} Posts"
+                        break
 
         def value_after(
             patterns,
@@ -1400,12 +1865,6 @@ def extract_job_details(source_url):
 #
 FEE_OVERRIDES = {
 
-    "Bank of India BOI SO Online Form 2026 – Date Extend": {
-        "feeGen": "₹ 1180/-", "feeOBC": "₹ 1180/-", "feeSC": "₹ 175/-",
-        "feeST": "₹ 175/-", "feeReserved": "₹ 175/-",
-        "feeFemale": "₹ 1180/-", "feeMode": "Online"
-    },
-
     "JSSC 10+2 Inter Level JILCCE Online form 2026": {
         "feeGen": "₹ 100/-",
         "feeOBC": "₹ 100/-",
@@ -1539,36 +1998,6 @@ FEE_OVERRIDES = {
     # --------------------------------------------------------
     # NEW VERIFIED PERMANENT CORRECTIONS
     # --------------------------------------------------------
-
-    "BPSC School Teacher TRE 4.0 Online Form 2026 (33,320 Posts)": {
-        "feeGen": "₹ 100/-",
-        "feeOBC": "₹ 100/-",
-        "feeSC": "₹ 100/-",
-        "feeST": "₹ 100/-",
-        "feeReserved": "₹ 100/-",
-        "feeFemale": "₹ 100/-",
-        "feeMode": "Online",
-    },
-
-    "JSSC Para Teacher JTAACCE Online form 2026 (7299 Posts) – Start": {
-        "feeGen": "₹ 100/-",
-        "feeOBC": "₹ 100/-",
-        "feeSC": "₹ 50/-",
-        "feeST": "₹ 50/-",
-        "feeReserved": "₹ 50/- (Jharkhand SC/ST)",
-        "feeFemale": "As per category",
-        "feeMode": "Online",
-    },
-
-    "Assam Rifles Technical / Tradesman Online Form 2026": {
-        "feeGen": "₹ 100/-",
-        "feeOBC": "₹ 100/-",
-        "feeSC": "₹ 0/-",
-        "feeST": "₹ 0/-",
-        "feeReserved": "₹ 0/- (Ex-Servicemen)",
-        "feeFemale": "Not Eligible",
-        "feeMode": "Online / SBI Challan",
-    },
 
     "BPSC School Teacher TRE 4.0 Online Form 2026 (32,388 Posts)": {
         "feeGen": "₹ 100/-",
