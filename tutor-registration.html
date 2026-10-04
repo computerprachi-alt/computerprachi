@@ -568,6 +568,91 @@ body{
 const CP_TUTOR_API =
 'https://script.google.com/macros/s/AKfycbyMyzWHtyHedM6uLdVPmsGDcm_AjlebLYd_QP24HOtbLfV-8MVgpRg1P-VPjUr9YDgFyg/exec';
 
+// Public browser configuration only. Replace the placeholder with the project's
+// Supabase publishable/anon key; never put a service_role or secret key here.
+const CP_SUPABASE_URL = 'https://nnwbezwnwxybwwnhaetw.supabase.co';
+const CP_SUPABASE_PUBLISHABLE_KEY = 'PASTE_SUPABASE_PUBLISHABLE_KEY_HERE';
+const CP_TUTOR_PENDING_KEY = 'cpTutorRegistrationPendingV1';
+
+function getPendingTutorSubmission(){
+  try {
+    const raw = localStorage.getItem(CP_TUTOR_PENDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function setPendingTutorSubmission(value){
+  localStorage.setItem(CP_TUTOR_PENDING_KEY, JSON.stringify(value));
+}
+
+function showTutorPaymentLink(res){
+  document.getElementById('regId').textContent = res.registrationId || '';
+  document.getElementById('regIdBox').style.display = 'block';
+  const paymentArea = document.getElementById('paymentButtonArea');
+  paymentArea.innerHTML = '';
+
+  if (res.paymentUrl) {
+    const payButton = document.createElement('a');
+    payButton.href = res.paymentUrl;
+    payButton.target = '_blank';
+    payButton.rel = 'noopener noreferrer';
+    payButton.textContent = '💳 Pay ₹10 Registration Fee';
+    paymentArea.appendChild(payButton);
+    document.getElementById('saveStatus').textContent =
+      'Registration save हो गई है। अब नीचे ₹10 payment करें।';
+  } else {
+    document.getElementById('saveStatus').textContent =
+      'Registration details save हैं, लेकिन payment link उपलब्ध नहीं है। कृपया Computer Prachi support से संपर्क करें।';
+  }
+
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').textContent = '✅ Registration Saved';
+}
+
+async function saveTutorToSupabase(registration, payload){
+  const row = {
+    registration_id: registration.registrationId,
+    name: payload.name,
+    mobile: payload.mobile,
+    whatsapp: payload.whatsapp,
+    email: payload.email,
+    gender: payload.gender,
+    qualification: payload.qualification,
+    subjects: payload.subjects,
+    classes: payload.classes,
+    board: payload.board,
+    experience: payload.experience,
+    mode: payload.mode,
+    state: payload.state,
+    city: payload.city,
+    area: payload.area,
+    tuition_fee: payload.tuitionFee,
+    available_time: payload.time,
+    about: payload.about
+  };
+
+  const response = await fetch(CP_SUPABASE_URL + '/rest/v1/tutor_registrations', {
+    method: 'POST',
+    headers: {
+      'apikey': CP_SUPABASE_PUBLISHABLE_KEY,
+      'Authorization': 'Bearer ' + CP_SUPABASE_PUBLISHABLE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(row)
+  });
+
+  // A duplicate ID on retry means the previous INSERT may have succeeded but
+  // its response was lost. The Apps Script response is persisted locally first,
+  // so do not POST to Apps Script again for this pending submission.
+  if (response.status === 409) return {alreadyInserted: true};
+  if (!response.ok) throw new Error('Supabase insert failed (' + response.status + ')');
+  return {alreadyInserted: false};
+}
+
+
 
 function val(id){
 
@@ -578,284 +663,144 @@ function val(id){
 }
 
 
-function preparePayment(){
+async function preparePayment(){
 
-  const required = [
-    'name',
-    'mobile',
-    'qualification',
-    'subjects',
-    'state',
-    'city'
-  ];
+  const submitBtn = document.getElementById('submitBtn');
+  const box = document.getElementById('paymentBox');
+  const status = document.getElementById('saveStatus');
 
+  if (!CP_SUPABASE_PUBLISHABLE_KEY ||
+      CP_SUPABASE_PUBLISHABLE_KEY === 'PASTE_SUPABASE_PUBLISHABLE_KEY_HERE') {
+    box.style.display = 'block';
+    status.textContent =
+      'Supabase publishable key configure नहीं है। Registration अभी submit नहीं हुई है। कृपया site configuration में public/publishable key जोड़ें।';
+    return;
+  }
 
-  for(const id of required){
+  let pending = getPendingTutorSubmission();
 
-    const el = document.getElementById(id);
+  if (pending && pending.appsScriptUncertain) {
+    status.textContent =
+      'पहले की registration request का final confirmation नहीं मिला था। Duplicate record से बचने के लिए इसे automatic retry नहीं किया जाएगा। कृपया Registration ID/Sheet status को Computer Prachi support से verify कराएँ।';
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⚠️ Confirmation Required';
+    box.style.display = 'block';
+    return;
+  }
 
-    if(!val(id)){
+  if (!pending) {
+    const required = ['name','mobile','qualification','subjects','state','city'];
+    for (const id of required) {
+      const el = document.getElementById(id);
+      if (!val(id)) {
+        alert('कृपया सभी required (*) details भरें।');
+        el.focus();
+        return;
+      }
+    }
 
-      alert('कृपया सभी required (*) details भरें।');
-
-      el.focus();
-
+    const mobile = val('mobile');
+    if (!/^\d{10}$/.test(mobile)) {
+      alert('कृपया 10 digit mobile number डालें।');
+      document.getElementById('mobile').focus();
       return;
     }
 
+    const whatsapp = val('whatsapp');
+    if (whatsapp && !/^\d{10}$/.test(whatsapp)) {
+      alert('WhatsApp number 10 digit होना चाहिए।');
+      document.getElementById('whatsapp').focus();
+      return;
+    }
+
+    if (!document.getElementById('agree').checked) {
+      alert('कृपया declaration checkbox tick करें।');
+      return;
+    }
+
+    pending = {
+      payload: {
+        name: val('name'),
+        mobile: val('mobile'),
+        whatsapp: val('whatsapp'),
+        email: val('email'),
+        gender: val('gender'),
+        qualification: val('qualification'),
+        subjects: val('subjects'),
+        classes: val('classes'),
+        board: val('board'),
+        experience: val('experience'),
+        mode: val('mode'),
+        state: val('state'),
+        city: val('city'),
+        area: val('area'),
+        tuitionFee: val('tuitionFee'),
+        time: val('time'),
+        about: val('about')
+      },
+      appsScriptResponse: null,
+      supabaseDone: false
+    };
+    setPendingTutorSubmission(pending);
   }
-
-
-  const mobile = val('mobile');
-
-  if(!/^\d{10}$/.test(mobile)){
-
-    alert('कृपया 10 digit mobile number डालें।');
-
-    document.getElementById('mobile').focus();
-
-    return;
-  }
-
-
-  const whatsapp = val('whatsapp');
-
-  if(
-    whatsapp &&
-    !/^\d{10}$/.test(whatsapp)
-  ){
-
-    alert('WhatsApp number 10 digit होना चाहिए।');
-
-    document.getElementById('whatsapp').focus();
-
-    return;
-  }
-
-
-  if(!document.getElementById('agree').checked){
-
-    alert('कृपया declaration checkbox tick करें।');
-
-    return;
-  }
-
-
-  const submitBtn =
-    document.getElementById('submitBtn');
-
-  const box =
-    document.getElementById('paymentBox');
-
-  const status =
-    document.getElementById('saveStatus');
-
 
   submitBtn.disabled = true;
-
-  submitBtn.textContent =
-    '⏳ Registration Save हो रही है…';
-
-
+  submitBtn.textContent = '⏳ Registration Save हो रही है…';
   box.style.display = 'block';
-
-  status.textContent =
-    'Registration details save की जा रही हैं…';
-
-
-  document.getElementById('paymentButtonArea').innerHTML = '';
-
-
-  const data = {
-
-    name: val('name'),
-
-    mobile: val('mobile'),
-
-    whatsapp: val('whatsapp'),
-
-    email: val('email'),
-
-    gender: val('gender'),
-
-    qualification: val('qualification'),
-
-    subjects: val('subjects'),
-
-    classes: val('classes'),
-
-    board: val('board'),
-
-    experience: val('experience'),
-
-    mode: val('mode'),
-
-    state: val('state'),
-
-    city: val('city'),
-
-    area: val('area'),
-
-    tuitionFee: val('tuitionFee'),
-
-    time: val('time'),
-
-    about: val('about')
-
-  };
-
-
-  if(
-    !CP_TUTOR_API ||
-    CP_TUTOR_API.includes('PASTE_GOOGLE')
-  ){
-
-    status.textContent =
-      'Google Apps Script URL connect नहीं है।';
-
-    submitBtn.disabled = false;
-
-    submitBtn.textContent =
-      '💳 Proceed to ₹10 Registration Payment';
-
-    return;
-  }
-
-
-  fetch(CP_TUTOR_API, {
-
-    method:'POST',
-
-    mode:'cors',
-
-    headers:{
-      'Content-Type':
-      'text/plain;charset=utf-8'
-    },
-
-    body:JSON.stringify(data)
-
-  })
-
-  .then(function(response){
-
-    if(!response.ok){
-
-      throw new Error(
-        'Server response error'
-      );
-
-    }
-
-    return response.json();
-
-  })
-
-  .then(function(res){
-
-    if(res.success){
-
-      document.getElementById('regId').textContent =
-        res.registrationId;
-
-      document.getElementById('regIdBox').style.display =
-        'block';
-
-
-      status.textContent =
-        'Registration details successfully save हो गई हैं।';
-
-
-      /*
-       * Razorpay unique payment URL
-       */
-
-      const paymentArea =
-        document.getElementById(
-          'paymentButtonArea'
-        );
-
-
-      if(res.paymentUrl){
-
-        const payButton =
-          document.createElement('a');
-
-
-        payButton.href =
-          res.paymentUrl;
-
-        payButton.target =
-          '_blank';
-
-        payButton.rel =
-          'noopener noreferrer';
-
-        payButton.textContent =
-          '💳 Pay ₹10 Registration Fee';
-
-
-        paymentArea.appendChild(
-          payButton
-        );
-
-
-        status.textContent =
-          'Registration save हो गई है। अब नीचे ₹10 payment करें।';
-
-
-      }else{
-
-        status.textContent =
-          'Registration save हो गई है, लेकिन payment link नहीं मिला। कृपया दोबारा कोशिश करें।';
-
+  status.textContent = 'Registration details securely save की जा रही हैं…';
+  box.scrollIntoView({behavior:'smooth', block:'center'});
+
+  try {
+    // Preserve the established Apps Script → Razorpay flow. Persist its result
+    // before calling Supabase so a Supabase retry never creates a second Sheet row.
+    if (!pending.appsScriptResponse) {
+      const response = await fetch(CP_TUTOR_API, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(pending.payload)
+      });
+
+      if (!response.ok) throw new Error('Registration service unavailable');
+      const result = await response.json();
+      if (!result.success || !result.registrationId) {
+        throw new Error('Registration could not be confirmed');
       }
 
-
-      submitBtn.disabled = true;
-
-      submitBtn.textContent =
-        '✅ Registration Saved';
-
-
-    }else{
-
-      status.textContent =
-        'Save नहीं हो पाया: ' +
-        (res.error || 'Unknown error');
-
-
-      submitBtn.disabled = false;
-
-      submitBtn.textContent =
-        '💳 Proceed to ₹10 Registration Payment';
-
+      pending.appsScriptResponse = {
+        success: true,
+        registrationId: result.registrationId,
+        paymentUrl: result.paymentUrl || '',
+        paymentLinkId: result.paymentLinkId || ''
+      };
+      setPendingTutorSubmission(pending);
     }
 
-  })
+    status.textContent = 'Registration ID सुरक्षित है। Supabase में details sync हो रही हैं…';
+    await saveTutorToSupabase(pending.appsScriptResponse, pending.payload);
+    pending.supabaseDone = true;
+    setPendingTutorSubmission(pending);
 
-  .catch(function(error){
-
-    console.error(error);
-
-
-    status.textContent =
-      'Server से connection नहीं हो पाया। कृपया बाद में फिर कोशिश करें।';
-
-
-    submitBtn.disabled = false;
-
-    submitBtn.textContent =
-      '💳 Proceed to ₹10 Registration Payment';
-
-  });
-
-
-  box.scrollIntoView({
-    behavior:'smooth',
-    block:'center'
-  });
-
+    localStorage.removeItem(CP_TUTOR_PENDING_KEY);
+    showTutorPaymentLink(pending.appsScriptResponse);
+  } catch (error) {
+    console.error('Tutor registration sync failed:', error);
+    if (pending.appsScriptResponse) {
+      status.textContent =
+        'Registration ID ' + pending.appsScriptResponse.registrationId +
+        ' और payment link सुरक्षित हैं, लेकिन Supabase sync अभी confirm नहीं हुई। कृपया इसी पेज पर फिर कोशिश करें; नया registration record नहीं बनाया जाएगा।';
+      submitBtn.disabled = false;
+      submitBtn.textContent = '↻ Retry Safe Supabase Sync';
+    } else {
+      // Persist an uncertain state so a refresh cannot silently resubmit Apps Script.
+      pending.appsScriptUncertain = true;
+      try { setPendingTutorSubmission(pending); } catch (storageError) {}
+      status.textContent =
+        'Registration service से confirmation नहीं मिल सका। Duplicate registration से बचने के लिए request दोबारा नहीं भेजी गई है; कृपया Computer Prachi support से संपर्क करें।';
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⚠️ Confirmation Required';
+    }
+  }
 }
 
 </script>
