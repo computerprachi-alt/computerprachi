@@ -1,8 +1,12 @@
--- Computer Prachi: additive Supabase migration for tutor registrations
--- Review the duplicate check before running. This migration does not drop or rewrite existing data.
+-- Computer Prachi: additive Supabase migration for tutor registrations.
+-- Safe to rerun: only adds missing columns/index/policies and adjusts privileges.
+-- Existing rows and existing column values are not dropped or rewritten.
+
 begin;
 
 alter table public.tutor_registrations
+  add column if not exists registration_id text,
+  add column if not exists name text,
   add column if not exists mobile text,
   add column if not exists whatsapp text,
   add column if not exists email text,
@@ -23,6 +27,7 @@ alter table public.tutor_registrations
   add column if not exists review_status text not null default 'pending';
 
 -- Refuse to silently choose between existing duplicate IDs.
+-- If duplicates exist, resolve them explicitly before applying the unique index.
 do $$
 begin
   if exists (
@@ -43,9 +48,8 @@ create unique index if not exists tutor_registrations_registration_id_uidx
 
 alter table public.tutor_registrations enable row level security;
 
--- Remove broad anonymous/authenticated table privileges, then grant INSERT only
--- for the submitted registration fields. Payment/review statuses are server defaults
--- and cannot be supplied/changed by anonymous clients.
+-- Anonymous clients can submit only the tutor profile fields listed here.
+-- They cannot supply payment_status or review_status; those use server-side defaults.
 revoke all on table public.tutor_registrations from anon, authenticated;
 grant insert (
   registration_id, name, mobile, whatsapp, email, gender, qualification,
@@ -53,6 +57,7 @@ grant insert (
   tuition_fee, available_time, about
 ) on table public.tutor_registrations to anon;
 
+-- Required permissive INSERT policy.
 drop policy if exists "Public can submit tutor registrations" on public.tutor_registrations;
 create policy "Public can submit tutor registrations"
   on public.tutor_registrations
@@ -65,7 +70,22 @@ create policy "Public can submit tutor registrations"
     and review_status = 'pending'
   );
 
--- Explicitly prevent public reads or mutations.
+-- Additional restrictive guard ensures other permissive INSERT policies, if any,
+-- cannot bypass the required name/ID and pending-status checks.
+drop policy if exists "Tutor registration pending status guard" on public.tutor_registrations;
+create policy "Tutor registration pending status guard"
+  on public.tutor_registrations
+  as restrictive
+  for insert
+  to anon
+  with check (
+    nullif(btrim(name), '') is not null
+    and nullif(btrim(registration_id), '') is not null
+    and payment_status = 'pending'
+    and review_status = 'pending'
+  );
+
+-- Explicitly remove known public read/mutation policies and privileges.
 drop policy if exists "Public can read tutor registrations" on public.tutor_registrations;
 drop policy if exists "Public can update tutor registrations" on public.tutor_registrations;
 drop policy if exists "Public can delete tutor registrations" on public.tutor_registrations;
