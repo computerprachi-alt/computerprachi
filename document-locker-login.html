@@ -6,8 +6,8 @@
 <script>
 const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
-const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const form=document.getElementById('loginForm'),msg=document.getElementById('message'),btn=document.getElementById('loginBtn');
 function show(text,ok=false){msg.hidden=false;msg.textContent=text;msg.style.color=ok?'#087c18':'#a00000'}
-form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;show('Signing in…',true);try{const {data,error}=await supabase.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value});if(error)throw error;if(!data.session)throw new Error('No authenticated session was created.');location.replace('document-locker-dashboard.html')}catch(err){show(err.message||'Login failed. Please check your credentials and email verification status.')}finally{btn.disabled=false}});
+form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;show('Signing in…',true);try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value});if(error)throw error;if(!data.session)throw new Error('No authenticated session was created.');location.replace('document-locker-dashboard.html')}catch(err){show(err.message||'Login failed. Please check your credentials and email verification status.')}finally{btn.disabled=false}});
 </script></body></html>
