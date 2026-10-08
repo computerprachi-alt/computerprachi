@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Account | Digital Document Locker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>:root{--navy:#07145c;--red:#c40000;--bg:#f5f7fb;--border:#d8dfeb}*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px Arial;color:#222}.wrap{max-width:760px;margin:25px auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 5px 22px #173b7a12;overflow:hidden}.head{background:var(--navy);color:#fff;text-align:center;padding:22px}.logo{font-weight:900;font-size:24px}.head h1{margin:8px 0 0;font-size:25px}.form{padding:26px}.field{margin-bottom:15px}.field label{display:block;font-weight:700;margin-bottom:6px;color:#25365f}.field input{width:100%;height:43px;border:1px solid #c9d2e2;border-radius:6px;padding:0 11px;font-size:14px}.field input:focus{outline:2px solid #dce7ff;border-color:#4669a8}.btn{width:100%;height:45px;border:0;border-radius:6px;background:var(--red);color:#fff;font-weight:700;cursor:pointer}.btn:disabled{opacity:.6;cursor:wait}.msg{margin-top:14px;padding:11px;border-radius:6px;background:#f4f7fb;line-height:1.5}.links{text-align:center;margin-top:17px}.links a{color:#0019a8}.note{font-size:12px;color:#666;line-height:1.5;margin:12px 0}.back{display:block;margin-top:18px;text-align:center}@media(max-width:600px){.wrap{margin:0;border:0;border-radius:0;min-height:100vh}.form{padding:20px 15px}}</style></head>
+<body><div class="wrap"><header class="head"><div class="logo">CP LOCKER</div><h1>Create your secure account</h1></header><main class="form"><form id="registerForm">
+<div class="field"><label for="fullName">Full Name</label><input id="fullName" required autocomplete="name"></div>
+<div class="field"><label for="mobile">Mobile</label><input id="mobile" required inputmode="tel" autocomplete="tel"></div>
+<div class="field"><label for="email">Email</label><input id="email" required type="email" autocomplete="email"></div>
+<div class="field"><label for="password">Password</label><input id="password" required type="password" minlength="8" autocomplete="new-password"></div>
+<div class="field"><label for="confirmPassword">Confirm Password</label><input id="confirmPassword" required type="password" minlength="8" autocomplete="new-password"></div>
+<p class="note">Your password is processed by Supabase Auth. This page does not save the password in a custom Computer Prachi table.</p>
+<button class="btn" id="submitBtn" type="submit">Create Account</button><div class="msg" id="message" hidden></div></form>
+<div class="links">Already have an account? <a href="document-locker-login.html">Login</a> · <a href="document-locker.html">Locker Home</a></div></main></div>
+<script>
+const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
+const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const form=document.getElementById('registerForm'),msg=document.getElementById('message'),btn=document.getElementById('submitBtn');
+function show(text,ok=false){msg.hidden=false;msg.textContent=text;msg.style.color=ok?'#087c18':'#a00000';}
+form.addEventListener('submit',async e=>{e.preventDefault();const fullName=document.getElementById('fullName').value.trim(),mobile=document.getElementById('mobile').value.trim(),email=document.getElementById('email').value.trim(),password=document.getElementById('password').value,confirm=document.getElementById('confirmPassword').value;
+if(password!==confirm){show('Passwords do not match.');return} if(password.length<8){show('Password must contain at least 8 characters.');return}
+btn.disabled=true;show('Creating your account…',true);
+try{const {data,error}=await supabase.auth.signUp({email,password,options:{data:{full_name:fullName,mobile:mobile},emailRedirectTo:new URL('document-locker-dashboard.html',location.href).href}});
+if(error)throw error;
+if(data.session){location.replace('document-locker-dashboard.html');return}
+show('Account created. Please check your email and complete the Supabase email verification before logging in.',true);form.reset();
+}catch(err){show(err.message||'Registration failed. Please try again.')}finally{btn.disabled=false}});
+</script></body></html>
