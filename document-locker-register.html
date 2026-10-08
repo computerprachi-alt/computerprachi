@@ -14,13 +14,13 @@
 <script>
 const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
-const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const form=document.getElementById('registerForm'),msg=document.getElementById('message'),btn=document.getElementById('submitBtn');
 function show(text,ok=false){msg.hidden=false;msg.textContent=text;msg.style.color=ok?'#087c18':'#a00000';}
 form.addEventListener('submit',async e=>{e.preventDefault();const fullName=document.getElementById('fullName').value.trim(),mobile=document.getElementById('mobile').value.trim(),email=document.getElementById('email').value.trim(),password=document.getElementById('password').value,confirm=document.getElementById('confirmPassword').value;
 if(password!==confirm){show('Passwords do not match.');return} if(password.length<8){show('Password must contain at least 8 characters.');return}
 btn.disabled=true;show('Creating your account…',true);
-try{const {data,error}=await supabase.auth.signUp({email,password,options:{data:{full_name:fullName,mobile:mobile},emailRedirectTo:new URL('document-locker-dashboard.html',location.href).href}});
+try{const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{full_name:fullName,mobile:mobile},emailRedirectTo:new URL('document-locker-dashboard.html',location.href).href}});
 if(error)throw error;
 if(data.session){location.replace('document-locker-dashboard.html');return}
 show('Account created. Please check your email and complete the Supabase email verification before logging in.',true);form.reset();
