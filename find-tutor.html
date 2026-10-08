@@ -46,6 +46,8 @@
 </div>
 <script>
 const CP_TUTOR_API='https://script.google.com/macros/s/AKfycbyMyzWHtyHedM6uLdVPmsGDcm_AjlebLYd_QP24HOtbLfV-8MVgpRg1P-VPjUr9YDgFyg/exec';
+const CP_SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
+const CP_SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
 let tutors=[];
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]})}
 const INDIAN_STATES_AND_UTS=[
@@ -238,15 +240,38 @@ function unlock(id,btn){
 document.getElementById('search').addEventListener('input',render);
 document.getElementById('directoryState').addEventListener('change',()=>{directorySubject='';directoryArea='';document.getElementById('directoryDistrict').value='';renderDirectory();render();});
 document.getElementById('directoryDistrict').addEventListener('change',()=>{directorySubject='';directoryArea='';renderDirectory();render();});
-fetch(CP_TUTOR_API+'?action=approved_tutors')
- .then(r=>r.json()).then(response=>{
-   const tutorsFromApi=Array.isArray(response.tutors)?response.tutors:[];
-   tutors=tutorsFromApi;
+fetch(CP_SUPABASE_URL+'/rest/v1/rpc/get_public_tutors',{
+ method:'POST',
+ headers:{
+   'apikey':CP_SUPABASE_PUBLISHABLE_KEY,
+   'Authorization':'Bearer '+CP_SUPABASE_PUBLISHABLE_KEY,
+   'Content-Type':'application/json'
+ },
+ body:'{}'
+})
+ .then(r=>{
+   if(!r.ok) throw new Error('Tutor list load नहीं हो सकी।');
+   return r.json();
+ }).then(response=>{
+   const tutorsFromApi=Array.isArray(response)?response:[];
+   tutors=tutorsFromApi.map(t=>({
+     registrationId:t.registration_id,
+     name:t.name,
+     qualification:t.qualification,
+     subjects:t.subjects,
+     classes:t.classes,
+     board:t.board,
+     experience:t.experience,
+     mode:t.mode,
+     state:t.state,
+     city:t.city,
+     area:t.area
+   }));
    if(!tutors.length) throw new Error('Tutor list नहीं मिली।');
    renderDirectory();
    document.getElementById('status').textContent=tutors.length+' approved tutor profile उपलब्ध हैं।';
    render();
- }).catch(err=>{document.getElementById('status').textContent='❌ Tutor list load नहीं हो सकी: '+err.message});
+ }).catch(err=>{document.getElementById('status').textContent='❌ Tutor list load नहीं हो सकी।'});
 </script>
 <section id="cp-adsense-original-find_tutor" style="margin:16px auto;padding:16px 18px;border:1px solid #d7e1ef;border-left:5px solid #0b3b8f;background:#f8fbff;border-radius:8px;line-height:1.7;max-width:1000px"><h2 style="margin:0 0 8px;color:#0b3b8f;font-size:19px">Find Teacher / Tutor – Computer Prachi Guide</h2><p style="margin:7px 0">Tutor खोजते समय subject, class, board, location, teaching mode और उपलब्ध समय जैसी जरूरतों को पहले तय करें। Directory में दिखाई देने वाली basic information को contact या profile unlock से पहले carefully check करें।</p><p style="margin:7px 0">Teacher की qualification, experience, fee और availability को सीधे teacher से verify करें। Payment या enquiry करने से पहले profile details पढ़ें। Computer Prachi tutor information को व्यवस्थित करने का platform है; teaching agreement student और teacher के बीच होता है।</p></section>
 </body>
