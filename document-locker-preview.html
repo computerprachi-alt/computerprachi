@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personal & Education Report | CP Digital Document Locker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#07145c;--red:#c40000;--bg:#f3f5f9;--border:#d9dfeb;--muted:#5b6578}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#202633;font:14px Arial,sans-serif;line-height:1.5}
+.toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:18px}
+button{border:0;border-radius:5px;background:var(--navy);color:white;padding:10px 16px;font-weight:700;cursor:pointer}.secondary{background:#e7ebf3;color:#202b43}
+.sheet{max-width:900px;margin:0 auto 30px;background:white;padding:34px 40px;box-shadow:0 4px 22px #10234b12}
+.masthead{border-bottom:3px solid var(--red);padding-bottom:16px;margin-bottom:24px}.masthead h1{margin:0;color:var(--navy);font-size:26px}.masthead p{margin:5px 0;color:var(--muted)}
+h2{font-size:18px;color:var(--navy);margin:25px 0 12px;border-bottom:1px solid var(--border);padding-bottom:7px}
+h3{font-size:15px;color:var(--navy);margin:0 0 12px}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;margin:0}
+.detail{border-bottom:1px solid #e8ebf1;padding:9px 0;min-width:0;break-inside:avoid}.detail dt{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.detail dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:14px}
+.education-card{border:1px solid var(--border);border-radius:6px;padding:16px;margin:0 0 14px;break-inside:avoid}.empty,.message{padding:14px;border:1px solid var(--border);border-radius:5px;color:var(--muted);background:#f8f9fc}
+.footer{border-top:1px solid var(--border);margin-top:30px;padding-top:12px;color:var(--muted);font-size:11px}
+[hidden]{display:none!important}
+@media(max-width:600px){.sheet{margin:0;padding:22px 16px}.details{grid-template-columns:1fr}.masthead h1{font-size:22px}}
+@media print{@page{size:A4;margin:14mm}body{background:white;font-size:11pt}.toolbar,.no-print{display:none!important}.sheet{max-width:none;margin:0;padding:0;box-shadow:none}.masthead h1{font-size:20pt}h2{break-after:avoid}.education-card{border:1px solid #bbb}.detail{border-bottom:1px solid #ddd}.footer{margin-top:18px}a{color:inherit;text-decoration:none}}
+</style>
+</head>
+<body>
+<nav class="toolbar" aria-label="Report controls">
+<button id="printBtn" type="button">Print</button><button id="savePdfBtn" type="button" class="secondary">Save as PDF</button><button id="backBtn" type="button" class="secondary">Back to Dashboard</button><button id="logoutBtn" type="button" class="secondary">Logout</button>
+</nav>
+<div id="loading" class="message" style="max-width:900px;margin:20px auto;text-align:center">Checking secure session and loading your report…</div>
+<div id="message" class="message" hidden style="max-width:900px;margin:20px auto" role="alert"></div>
+<main id="report" class="sheet" hidden>
+<header class="masthead"><h1>Computer Prachi Digital Document Locker</h1><p>Personal Profile &amp; Education Records</p><p id="generatedFor"></p><p id="generatedDate"></p></header>
+<section><h2>Personal Profile</h2><div id="profileDetails"></div></section>
+<section><h2>Education Records</h2><div id="educationDetails"></div></section>
+<footer class="footer">Confidential personal report. Generated from the signed-in user's saved records.</footer>
+</main>
+<script>
+const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const loading=document.getElementById('loading');
+const report=document.getElementById('report');
+const message=document.getElementById('message');
+const fields=[
+ ['full_name','Full Name'],['email','Email'],['mobile','Mobile'],['date_of_birth','Date of Birth']
+];
+const educationFields=[
+ ['qualification_type','Qualification Type'],['class_or_course','Class/Course'],
+ ['board_or_university','Board/University'],['institution_name','Institution'],
+ ['roll_number','Roll Number'],['enrollment_number','Enrollment Number'],
+ ['passing_year','Passing Year'],['total_marks','Total Marks'],
+ ['obtained_marks','Obtained Marks'],['percentage','Percentage']
+];
+function displayValue(value){if(value===null||value===undefined||String(value).trim()==='')return 'Not provided';return String(value)}
+function escapeHtml(value){return displayValue(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function renderTable(items){return '<dl class="details">'+items.map(([label,value])=>'<div class="detail"><dt>'+escapeHtml(label)+'</dt><dd>'+escapeHtml(value)+'</dd></div>').join('')+'</dl>'}
+function showError(text){loading.hidden=true;message.hidden=false;message.textContent=text;report.hidden=true}
+async function loadReport(){
+ try{
+  const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
+  if(sessionError||!sessionData.session){location.replace('document-locker-login.html');return}
+  const user=sessionData.session.user;
+  const [{data:profile,error:profileError},{data:records,error:recordsError}]=await Promise.all([
+   supabaseClient.from('document_profiles').select('id,full_name,email,mobile,date_of_birth').eq('id',user.id).maybeSingle(),
+   supabaseClient.from('education_records').select('id,user_id,qualification_type,class_or_course,board_or_university,institution_name,roll_number,enrollment_number,passing_year,total_marks,obtained_marks,percentage').eq('user_id',user.id).order('passing_year',{ascending:false})
+  ]);
+  if(profileError)throw new Error('Unable to load personal profile: '+profileError.message);
+  if(recordsError)throw new Error('Unable to load education records: '+recordsError.message);
+  const personal=profile||{};
+  document.getElementById('profileDetails').innerHTML=renderTable([
+   ['Full Name',personal.full_name],['Email',personal.email||user.email],['Mobile',personal.mobile],['Date of Birth',personal.date_of_birth]
+  ]);
+  const list=document.getElementById('educationDetails');
+  if(!records||records.length===0){list.innerHTML='<p class="empty">No education records have been saved yet.</p>'}
+  else{list.innerHTML=records.map((row,index)=>'<section class="education-card"><h3>Education Record '+(index+1)+'</h3>'+renderTable(educationFields.map(([key,label])=>[label,row[key]]))+'</section>').join('')}
+  document.getElementById('generatedFor').textContent='Prepared for '+displayValue(personal.full_name||user.email);
+  document.getElementById('generatedDate').textContent='Report generated '+new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  loading.hidden=true;report.hidden=false;
+ }catch(error){showError(error.message||'The report could not be loaded.')}
+}
+document.getElementById('printBtn').addEventListener('click',()=>window.print());
+document.getElementById('backBtn').addEventListener('click',()=>location.assign('document-locker-dashboard.html'));
+document.getElementById('logoutBtn').addEventListener('click',async()=>{try{await supabaseClient.auth.signOut()}finally{location.replace('document-locker-login.html')}});
+supabaseClient.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||!session)location.replace('document-locker-login.html')});
+loadReport();
+document.getElementById('savePdfBtn').addEventListener('click',()=>window.print());
+</script>
+</body></html>
