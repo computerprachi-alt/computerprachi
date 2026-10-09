@@ -6,10 +6,10 @@
 <script>
 const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
-const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const loading=document.getElementById('loading'),content=document.getElementById('content'),identity=document.getElementById('identity');
-async function requireSession(){const {data,error}=await supabase.auth.getSession();if(error||!data.session){location.replace('document-locker-login.html');return}const user=data.session.user;identity.textContent='Signed in as '+(user.email||'your verified account')+'.';loading.hidden=true;content.hidden=false}
-document.getElementById('logoutBtn').addEventListener('click',async()=>{const btn=document.getElementById('logoutBtn');btn.disabled=true;try{await supabase.auth.signOut()}finally{location.replace('document-locker-login.html')}});
-supabase.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||!session)location.replace('document-locker-login.html')});
+async function requireSession(){const {data,error}=await supabaseClient.auth.getSession();if(error||!data.session){location.replace('document-locker-login.html');return}const user=data.session.user;identity.textContent='Signed in as '+(user.email||'your verified account')+'.';loading.hidden=true;content.hidden=false}
+document.getElementById('logoutBtn').addEventListener('click',async()=>{const btn=document.getElementById('logoutBtn');btn.disabled=true;try{await supabaseClient.auth.signOut()}finally{location.replace('document-locker-login.html')}});
+supabaseClient.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||!session)location.replace('document-locker-login.html')});
 requireSession();
 </script></body></html>
