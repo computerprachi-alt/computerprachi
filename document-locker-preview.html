@@ -14,11 +14,11 @@ button{border:0;border-radius:5px;background:var(--navy);color:white;padding:10p
 h2{font-size:18px;color:var(--navy);margin:25px 0 12px;border-bottom:1px solid var(--border);padding-bottom:7px}
 h3{font-size:15px;color:var(--navy);margin:0 0 12px}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;margin:0}
 .detail{border-bottom:1px solid #e8ebf1;padding:9px 0;min-width:0;break-inside:avoid}.detail dt{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.detail dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:14px}
-.education-card{border:1px solid var(--border);border-radius:6px;padding:16px;margin:0 0 14px;break-inside:avoid}.empty,.message{padding:14px;border:1px solid var(--border);border-radius:5px;color:var(--muted);background:#f8f9fc}
+.education-card{border:1px solid var(--border);border-radius:6px;padding:16px;margin:0 0 14px;break-inside:avoid}.document-report{margin-top:14px;padding-top:10px;border-top:1px solid var(--border)}.document-report h4{margin:0 0 8px;color:var(--navy)}.document-row{padding:8px 0;border-bottom:1px solid #e8ebf1;overflow-wrap:anywhere}.document-actions{display:flex;gap:6px;flex-wrap:wrap}.document-actions button{padding:6px 10px;margin:6px 6px 0 0}.empty,.message{padding:14px;border:1px solid var(--border);border-radius:5px;color:var(--muted);background:#f8f9fc}
 .footer{border-top:1px solid var(--border);margin-top:30px;padding-top:12px;color:var(--muted);font-size:11px}
 [hidden]{display:none!important}
 @media(max-width:600px){.sheet{margin:0;padding:22px 16px}.details{grid-template-columns:1fr}.masthead h1{font-size:22px}}
-@media print{@page{size:A4;margin:14mm}body{background:white;font-size:11pt}.toolbar,.no-print{display:none!important}.sheet{max-width:none;margin:0;padding:0;box-shadow:none}.masthead h1{font-size:20pt}h2{break-after:avoid}.education-card{border:1px solid #bbb}.detail{border-bottom:1px solid #ddd}.footer{margin-top:18px}a{color:inherit;text-decoration:none}}
+@media print{@page{size:A4;margin:14mm}body{background:white;font-size:11pt}.toolbar,.no-print,.document-actions{display:none!important}.sheet{max-width:none;margin:0;padding:0;box-shadow:none}.masthead h1{font-size:20pt}h2{break-after:avoid}.education-card{border:1px solid #bbb}.detail{border-bottom:1px solid #ddd}.footer{margin-top:18px}a{color:inherit;text-decoration:none}}
 </style>
 </head>
 <body>
@@ -40,6 +40,7 @@ const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHA
 const loading=document.getElementById('loading');
 const report=document.getElementById('report');
 const message=document.getElementById('message');
+let currentUser=null;
 const fields=[
  ['full_name','Full Name'],['email','Email'],['mobile','Mobile'],['date_of_birth','Date of Birth']
 ];
@@ -54,24 +55,30 @@ function displayValue(value){if(value===null||value===undefined||String(value).t
 function escapeHtml(value){return displayValue(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 function renderTable(items){return '<dl class="details">'+items.map(([label,value])=>'<div class="detail"><dt>'+escapeHtml(label)+'</dt><dd>'+escapeHtml(value)+'</dd></div>').join('')+'</dl>'}
 function showError(text){loading.hidden=true;message.hidden=false;message.textContent=text;report.hidden=true}
+function formatFileSize(bytes){if(!Number.isFinite(Number(bytes))||Number(bytes)<0)return 'Unknown size';const n=Number(bytes);return n<1024?n+' B':(n/1024).toFixed(1)+' KB'}
+function safeStoragePath(path){return typeof path==='string'&&currentUser&&path.startsWith(currentUser.id+'/')&&!path.startsWith('/')}
+async function openPreviewDocument(documentId,downloadFile){let popup=null;if(!downloadFile){popup=window.open('about:blank','_blank');if(popup)popup.opener=null}try{const {data:doc,error}=await supabaseClient.from('education_documents').select('id,user_id,education_id,document_name,storage_path,mime_type').eq('id',documentId).eq('user_id',currentUser.id).maybeSingle();if(error)throw error;if(!doc||!safeStoragePath(doc.storage_path))throw new Error('Document not found or access denied.');const {data:record,error:recordError}=await supabaseClient.from('education_records').select('id').eq('id',doc.education_id).eq('user_id',currentUser.id).maybeSingle();if(recordError)throw recordError;if(!record)throw new Error('The linked education record is not accessible.');const {data:blob,error:storageError}=await supabaseClient.storage.from('education-documents').download(doc.storage_path);if(storageError)throw storageError;if(!blob)throw new Error('No file data was returned.');const objectUrl=URL.createObjectURL(blob);if(downloadFile){const a=document.createElement('a');a.href=objectUrl;a.download=doc.document_name||'document';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),60000)}else if(popup&&!popup.closed){popup.location.href=objectUrl;setTimeout(()=>URL.revokeObjectURL(objectUrl),60000)}else{URL.revokeObjectURL(objectUrl);throw new Error('Your browser blocked the View tab. Allow pop-ups and try again.')}}catch(error){if(popup&&!popup.closed)popup.close();message.hidden=false;message.textContent='Document action failed: '+(error.message||'Unknown error')}}
+function bindPreviewDocumentActions(){const container=document.getElementById('educationDetails');container.querySelectorAll('[data-document-view]').forEach(b=>b.addEventListener('click',()=>openPreviewDocument(b.dataset.documentView,false)));container.querySelectorAll('[data-document-download]').forEach(b=>b.addEventListener('click',()=>openPreviewDocument(b.dataset.documentDownload,true)))}
 async function loadReport(){
  try{
   const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
   if(sessionError||!sessionData.session){location.replace('document-locker-login.html');return}
-  const user=sessionData.session.user;
+  const user=sessionData.session.user;currentUser=user;
   const [{data:profile,error:profileError},{data:records,error:recordsError}]=await Promise.all([
    supabaseClient.from('document_profiles').select('id,full_name,email,mobile,date_of_birth').eq('id',user.id).maybeSingle(),
    supabaseClient.from('education_records').select('id,user_id,qualification_type,class_or_course,board_or_university,institution_name,roll_number,enrollment_number,passing_year,total_marks,obtained_marks,percentage').eq('user_id',user.id).order('passing_year',{ascending:false})
   ]);
   if(profileError)throw new Error('Unable to load personal profile: '+profileError.message);
   if(recordsError)throw new Error('Unable to load education records: '+recordsError.message);
+  let documents=[];
+  if(records&&records.length){const {data:docRows,error:docError}=await supabaseClient.from('education_documents').select('id,user_id,education_id,document_type,document_name,storage_path,file_size,mime_type,created_at').eq('user_id',user.id).in('education_id',records.map(row=>row.id)).order('created_at',{ascending:false});if(docError)throw new Error('Unable to load document names: '+docError.message);documents=docRows||[];}
   const personal=profile||{};
   document.getElementById('profileDetails').innerHTML=renderTable([
    ['Full Name',personal.full_name],['Email',personal.email||user.email],['Mobile',personal.mobile],['Date of Birth',personal.date_of_birth]
   ]);
   const list=document.getElementById('educationDetails');
   if(!records||records.length===0){list.innerHTML='<p class="empty">No education records have been saved yet.</p>'}
-  else{list.innerHTML=records.map((row,index)=>'<section class="education-card"><h3>Education Record '+(index+1)+'</h3>'+renderTable(educationFields.map(([key,label])=>[label,row[key]]))+'</section>').join('')}
+  else{list.innerHTML=records.map((row,index)=>{const docs=documents.filter(doc=>String(doc.education_id)===String(row.id));const docsHtml=docs.length?docs.map(doc=>'<div class="document-row"><b>'+escapeHtml(doc.document_name)+'</b><br>'+escapeHtml(doc.document_type)+' · '+escapeHtml(doc.mime_type==='application/pdf'?'PDF':doc.mime_type==='image/jpeg'?'JPG/JPEG':doc.mime_type==='image/png'?'PNG':'Unknown format')+' · '+escapeHtml(formatFileSize(doc.file_size))+'<div class="document-actions"><button type="button" data-document-view="'+escapeHtml(doc.id)+'">View</button><button type="button" class="secondary" data-document-download="'+escapeHtml(doc.id)+'">Download</button></div></div>').join(''):'<p class="empty">No documents saved for this qualification.</p>';return '<section class="education-card" data-education-id="'+escapeHtml(row.id)+'"><h3>'+escapeHtml(row.qualification_type)+' — '+escapeHtml(row.class_or_course)+'</h3>'+renderTable(educationFields.map(([key,label])=>[label,row[key]]))+'<div class="document-report"><h4>Uploaded Documents</h4>'+docsHtml+'</div></section>'}).join('');bindPreviewDocumentActions()}
   document.getElementById('generatedFor').textContent='Prepared for '+displayValue(personal.full_name||user.email);
   document.getElementById('generatedDate').textContent='Report generated '+new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
   loading.hidden=true;report.hidden=false;
