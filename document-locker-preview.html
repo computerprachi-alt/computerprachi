@@ -62,7 +62,7 @@ function bindPreviewDocumentActions(){const container=document.getElementById('e
 async function loadReport(){
  try{
   const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
-  if(sessionError||!sessionData.session){location.replace('document-locker-login.html');return}
+  if(sessionError){showError('Could not verify your session: '+sessionError.message);return}if(!sessionData.session){location.replace('document-locker-login.html');return}
   const user=sessionData.session.user;currentUser=user;
   const [{data:profile,error:profileError},{data:records,error:recordsError}]=await Promise.all([
    supabaseClient.from('document_profiles').select('id,full_name,email,mobile,date_of_birth').eq('id',user.id).maybeSingle(),
