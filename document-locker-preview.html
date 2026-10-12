@@ -9,6 +9,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#202633;font:14px Arial,sans-serif;line-height:1.5}
 .toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:18px}
 button{border:0;border-radius:5px;background:var(--navy);color:white;padding:10px 16px;font-weight:700;cursor:pointer}.secondary{background:#e7ebf3;color:#202b43}
+.home-link{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--navy);border-radius:5px;background:#fff;color:var(--navy);padding:10px 16px;font-weight:700;text-decoration:none;white-space:nowrap;cursor:pointer}.home-link:hover{background:#f0f4ff}
 .sheet{max-width:900px;margin:0 auto 30px;background:white;padding:34px 40px;box-shadow:0 4px 22px #10234b12}
 .masthead{border-bottom:3px solid var(--red);padding-bottom:16px;margin-bottom:24px}.masthead h1{margin:0;color:var(--navy);font-size:26px}.masthead p{margin:5px 0;color:var(--muted)}
 h2{font-size:18px;color:var(--navy);margin:25px 0 12px;border-bottom:1px solid var(--border);padding-bottom:7px}
@@ -23,7 +24,7 @@ h3{font-size:15px;color:var(--navy);margin:0 0 12px}.details{display:grid;grid-t
 </head>
 <body>
 <nav class="toolbar" aria-label="Report controls">
-<button id="printBtn" type="button">Print</button><button id="savePdfBtn" type="button" class="secondary">Save as PDF</button><button id="backBtn" type="button" class="secondary">Back to Dashboard</button><button id="logoutBtn" type="button" class="secondary">Logout</button>
+<a class="home-link" id="homeBtn" href="https://computerprachi.online/">Home</a><button id="printBtn" type="button">Print</button><button id="savePdfBtn" type="button" class="secondary">Save as PDF</button><button id="backBtn" type="button" class="secondary">Back to Dashboard</button><button id="logoutBtn" type="button" class="secondary">Logout</button>
 </nav>
 <div id="loading" class="message" style="max-width:900px;margin:20px auto;text-align:center">Checking secure session and loading your report…</div>
 <div id="message" class="message" hidden style="max-width:900px;margin:20px auto" role="alert"></div>
