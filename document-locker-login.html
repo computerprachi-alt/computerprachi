@@ -112,6 +112,7 @@ function initializeLocker() {
   let recoveryEmail = '';
   let otpSent = false;
   let recoveryVerified = false;
+  let recoveryUserId = null;
   let resendTimer = null;
   let resendAvailableAt = 0;
 
@@ -125,6 +126,46 @@ function initializeLocker() {
     recoveryMessage.hidden = false;
     recoveryMessage.textContent = message;
     recoveryMessage.style.color = success ? '#087c18' : '#a00000';
+  }
+
+  function safeAuthErrorDetails(error) {
+    const code = error && typeof error.code === 'string' ? error.code.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 80) : '';
+    const status = Number.isFinite(error && error.status) ? String(error.status) : '';
+    let message = error && typeof error.message === 'string' ? error.message : 'Unknown authentication error';
+    message = message
+      .replace(/(access[_ -]?token|refresh[_ -]?token|password|secret|authorization)\s*[:=]?\s*[^\s,;]+/ig, '$1=[redacted]')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .slice(0, 240);
+    const details = [];
+    if (code) details.push('code: ' + code);
+    if (status) details.push('HTTP ' + status);
+    if (message) details.push(message);
+    return details.join(' — ') || 'No safe error details were provided by Supabase.';
+  }
+
+  function describePasswordUpdateError(error) {
+    const code = String(error && error.code || '').toLowerCase();
+    const status = Number(error && error.status || 0);
+    const message = String(error && error.message || '');
+    const lower = message.toLowerCase();
+    if (code === 'recovery_session_missing' || code === 'recovery_session_user_mismatch' || code === 'password_update_unconfirmed') {
+      return message + ' (' + safeAuthErrorDetails(error) + ')';
+    }
+    if (/weak_password|password.*(weak|short|length|characters|compromised|pwned)|password.*should/i.test(code + ' ' + lower)) {
+      return 'Supabase rejected the new password because it does not meet the configured password policy. Choose a stronger password and try again. (' + safeAuthErrorDetails(error) + ')';
+    }
+    if (/session_not_found|refresh_token_not_found|invalid_refresh_token|refresh_token_already_used|jwt_expired|session_expired|invalid_grant/.test(code) ||
+        /session.*(missing|expired|invalid)|token.*expired|refresh token/.test(lower) || status === 401) {
+      return 'The recovery session is missing, expired, or no longer valid. Request a new email OTP, verify it, and submit a new password. (' + safeAuthErrorDetails(error) + ')';
+    }
+    if (status === 429 || /rate.?limit|too many requests/.test(code + ' ' + lower)) {
+      return 'Supabase rate-limited the password update. Wait before trying again. (' + safeAuthErrorDetails(error) + ')';
+    }
+    if (status >= 500 || /fetch|network|failed to fetch|load failed|timeout/.test(lower)) {
+      return 'The password update request could not be completed because of a network or Supabase service error. Check your connection and retry; if it continues, contact the site administrator. (' + safeAuthErrorDetails(error) + ')';
+    }
+    return 'Supabase rejected the password update. Check the safe error details below and correct the issue before retrying. (' + safeAuthErrorDetails(error) + ')';
   }
 
   function clearResendCooldown() {
@@ -161,6 +202,7 @@ function initializeLocker() {
     recoveryEmail = '';
     otpSent = false;
     recoveryVerified = false;
+    recoveryUserId = null;
     verifyOtpForm.hidden = true;
     newPasswordForm.hidden = true;
     emailRecoveryForm.hidden = false;
@@ -294,6 +336,7 @@ function initializeLocker() {
         throw new Error('The active recovery session could not be confirmed.');
       }
       recoveryVerified = true;
+      recoveryUserId = data.user.id;
       verifyOtpForm.hidden = true;
       newPasswordForm.hidden = false;
       showRecoveryMessage('Email OTP verified. Choose a new password.', true);
@@ -326,20 +369,36 @@ function initializeLocker() {
     try {
       const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!sessionData.session || !sessionData.session.user) {
-        throw new Error('Recovery session is missing. Verify the OTP again.');
+      const session = sessionData && sessionData.session;
+      if (!session || !session.user || !session.access_token) {
+        const missingSession = new Error('Your recovery session is missing or expired. Request a new email OTP and verify it again.');
+        missingSession.code = 'RECOVERY_SESSION_MISSING';
+        throw missingSession;
       }
-      const { error } = await supabaseClient.auth.updateUser({ password: password });
-      if (error) throw error;
+      if (!recoveryUserId || session.user.id !== recoveryUserId) {
+        const wrongSession = new Error('The active session does not match the account that verified this recovery OTP. Sign out and request a new OTP.');
+        wrongSession.code = 'RECOVERY_SESSION_USER_MISMATCH';
+        throw wrongSession;
+      }
+      const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({ password: password });
+      if (updateError) throw updateError;
+      if (!updateData || !updateData.user || updateData.user.id !== recoveryUserId) {
+        const unexpectedUser = new Error('Supabase did not confirm the password update for the verified account. Please sign in again and check the result.');
+        unexpectedUser.code = 'PASSWORD_UPDATE_UNCONFIRMED';
+        throw unexpectedUser;
+      }
       const { error: signOutError } = await supabaseClient.auth.signOut();
       if (signOutError) {
-        recoveryVerified = true;
-        showRecoveryMessage('Password updated, but automatic sign-out failed. Use Back to Login to retry ending the recovery session.');
+        recoveryVerified = false;
+        recoveryUserId = null;
+        newPasswordForm.hidden = true;
+        showRecoveryMessage('Password updated successfully. Automatic sign-out reported an error; use Back to Login, then sign in with the new password. (' + safeAuthErrorDetails(signOutError) + ')', true);
         return;
       }
       recoveryVerified = false;
+      recoveryUserId = null;
       newPasswordForm.hidden = true;
-      showRecoveryMessage('Password updated successfully. You can now sign in with your new password.', true);
+      showRecoveryMessage('Password updated successfully. You are signed out and can now sign in with your new password.', true);
       const backLink = document.getElementById('backToLogin');
       backLink.textContent = 'Return to Login';
       backLink.onclick = function (event) {
@@ -347,7 +406,7 @@ function initializeLocker() {
         showLogin();
       };
     } catch (error) {
-      showRecoveryMessage('Password could not be updated. The recovery session may have expired; request a new OTP and try again.');
+      showRecoveryMessage(describePasswordUpdateError(error));
     } finally {
       updatePasswordButton.disabled = false;
     }
