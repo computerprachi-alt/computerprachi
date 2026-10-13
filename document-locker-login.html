@@ -6,43 +6,29 @@
 <title>Login | Digital Document Locker</title>
 <style>
 :root{--navy:#07145c;--red:#c40000;--bg:#f5f7fb;--border:#d8dfeb}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px Arial,sans-serif;color:#222}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font:14px Arial,sans-serif;color:#222}
 .wrap{max-width:600px;margin:45px auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 5px 22px #173b7a12;overflow:hidden}
-.head{background:var(--navy);color:#fff;text-align:center;padding:24px}.head b{font-size:24px}.form{padding:28px}
-.field{margin-bottom:16px}.field label{display:block;font-weight:700;margin-bottom:6px;color:#25365f}
+.head{background:var(--navy);color:#fff;text-align:center;padding:24px}
+.head b{font-size:24px}
+.form{padding:28px}
+.field{margin-bottom:16px}
+.field label{display:block;font-weight:700;margin-bottom:6px;color:#25365f}
 .field input{width:100%;height:44px;border:1px solid #c9d2e2;border-radius:6px;padding:0 11px}
 .btn{width:100%;min-height:45px;border:0;border-radius:6px;background:var(--red);color:#fff;font-weight:700;cursor:pointer}
-.btn:disabled{opacity:.6;cursor:wait}.msg{margin-top:14px;padding:11px;border-radius:6px;background:#f4f7fb;line-height:1.5}
-.links{text-align:center;margin-top:18px;line-height:1.8}.links a,.forgot a{color:#0019a8}.forgot{text-align:right;margin:-7px 0 16px}
-.recovery-title{margin:0 0 12px;color:var(--navy);font-size:20px}.method-row{display:flex;gap:10px;margin:12px 0 18px}
+.btn:disabled{opacity:.6;cursor:wait}
+.msg{margin-top:14px;padding:11px;border-radius:6px;background:#f4f7fb;line-height:1.5}
+.links{text-align:center;margin-top:18px;line-height:1.8}
+.links a,.forgot a{color:#0019a8}
+.forgot{text-align:right;margin:-7px 0 16px}
+.recovery-title{margin:0 0 12px;color:var(--navy);font-size:20px}
+.method-row{display:flex;gap:10px;margin:12px 0 18px}
 .method{flex:1;min-height:42px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--navy);font-weight:700;cursor:pointer}
-.method[aria-pressed="true"]{background:var(--navy);color:#fff}.subnote{font-size:12px;color:#5b6475;line-height:1.5;margin:10px 0}
+.method[aria-pressed="true"]{background:var(--navy);color:#fff}
+.subnote{font-size:12px;color:#5b6475;line-height:1.5;margin:10px 0}
 .recovery-back{display:block;text-align:center;margin-top:18px}
 @media(max-width:600px){.wrap{margin:0;border:0;border-radius:0;min-height:100vh}.form{padding:22px 15px}}
 </style>
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script defer>
-const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
-const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const form=document.getElementById('loginForm'),msg=document.getElementById('message'),btn=document.getElementById('loginBtn');
-const recoveryPanel=document.getElementById('recoveryPanel'),loginLinks=document.getElementById('loginLinks'),recoveryMessage=document.getElementById('recoveryMessage');
-const emailMethod=document.getElementById('emailMethod'),mobileMethod=document.getElementById('mobileMethod'),emailRecoveryForm=document.getElementById('emailRecoveryForm'),verifyOtpForm=document.getElementById('verifyOtpForm'),newPasswordForm=document.getElementById('newPasswordForm');
-let recoveryEmail='',otpSent=false,recoveryVerified=false,resendAvailableAt=0,resendTimer=null;
-function show(text,ok=false){msg.hidden=false;msg.textContent=text;msg.style.color=ok?'#087c18':'#a00000'}
-function showRecovery(text,ok=false){recoveryMessage.hidden=false;recoveryMessage.textContent=text;recoveryMessage.style.color=ok?'#087c18':'#a00000'}
-function showLogin(){recoveryPanel.hidden=true;form.hidden=false;loginLinks.hidden=false;msg.hidden=true;clearInterval(resendTimer);resendTimer=null;const sendBtn=document.getElementById('sendOtpBtn');sendBtn.disabled=false;sendBtn.textContent='Send Email OTP'}
-function openRecovery(){form.hidden=true;loginLinks.hidden=true;recoveryPanel.hidden=false;recoveryMessage.hidden=true;document.getElementById('recoveryEmail').value=document.getElementById('email').value.trim();document.getElementById('recoveryEmail').focus()}
-function selectMethod(method){if(recoveryVerified){showRecovery('Finish resetting your password or return to Login to end the recovery session.');return}const email=method==='email';emailMethod.setAttribute('aria-pressed',String(email));mobileMethod.setAttribute('aria-pressed',String(!email));emailRecoveryForm.hidden=!email;verifyOtpForm.hidden=true;newPasswordForm.hidden=true;otpSent=false;showRecovery(email?'Enter the email address registered with your account.':'Mobile OTP recovery is currently unavailable because this repository does not prove that Supabase Phone Auth and an SMS provider are configured or that this account has a verified Auth phone number. No SMS will be sent.',!email?false:true)}
-document.getElementById('forgotLink').addEventListener('click',e=>{e.preventDefault();openRecovery()});
-document.getElementById('backToLogin').addEventListener('click',async e=>{e.preventDefault();if(recoveryVerified){const {error}=await supabaseClient.auth.signOut();if(error){showRecovery('Could not safely end the recovery session. Please retry or close this page.');return}recoveryVerified=false}showLogin()});
-emailMethod.addEventListener('click',()=>selectMethod('email'));
-mobileMethod.addEventListener('click',()=>selectMethod('mobile'));
-form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;show('Signing in…',true);try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value});if(error)throw error;if(!data.session)throw new Error('No authenticated session was created.');location.replace('document-locker-dashboard.html')}catch(err){show(err.message||'Login failed. Please check your credentials and email verification status.')}finally{btn.disabled=false}});
-emailRecoveryForm.addEventListener('submit',async e=>{e.preventDefault();const sendBtn=document.getElementById('sendOtpBtn');recoveryEmail=document.getElementById('recoveryEmail').value.trim().toLowerCase();if(!recoveryEmail){showRecovery('Enter your registered email address.');return}sendBtn.disabled=true;showRecovery('Requesting recovery code…',true);try{const {error}=await supabaseClient.auth.resetPasswordForEmail(recoveryEmail,{redirectTo:new URL('document-locker-login.html',location.href).href});if(error)throw error;otpSent=true;verifyOtpForm.hidden=false;showRecovery('If an account matches that address, a recovery code will be sent. Check your inbox and spam folder. For OTP-only recovery, the Supabase Password Recovery email template must use {{ .Token }}.',true);resendAvailableAt=Date.now()+60000;sendBtn.textContent='Resend available in 60s';clearInterval(resendTimer);resendTimer=setInterval(()=>{const seconds=Math.max(0,Math.ceil((resendAvailableAt-Date.now())/1000));sendBtn.textContent=seconds?'Resend available in '+seconds+'s':'Resend Email OTP';sendBtn.disabled=seconds>0;if(!seconds){clearInterval(resendTimer);resendTimer=null}},1000)}catch(err){showRecovery('If this account is eligible, recovery instructions may be sent. Please wait before retrying.');sendBtn.disabled=false}finally{if(!resendTimer)sendBtn.disabled=false}});
-verifyOtpForm.addEventListener('submit',async e=>{e.preventDefault();if(!otpSent){showRecovery('Request an OTP first.');return}const verifyBtn=document.getElementById('verifyOtpBtn');const token=document.getElementById('recoveryOtp').value.trim();if(!/^[0-9]{6,8}$/.test(token)){showRecovery('Enter the OTP from your recovery email.');return}verifyBtn.disabled=true;showRecovery('Verifying OTP…',true);try{const {data,error}=await supabaseClient.auth.verifyOtp({email:recoveryEmail,token,type:'recovery'});if(error)throw error;if(!data.session||!data.user)throw new Error('Recovery verification did not create an authenticated recovery session.');const {data:activeSessionData,error:activeSessionError}=await supabaseClient.auth.getSession();if(activeSessionError)throw activeSessionError;if(!activeSessionData.session||activeSessionData.session.user.id!==data.user.id)throw new Error('The active recovery session could not be confirmed.');recoveryVerified=true;verifyOtpForm.hidden=true;newPasswordForm.hidden=false;showRecovery('Email OTP verified. Choose a new password.',true);document.getElementById('newPassword').focus()}catch(err){showRecovery('The OTP is invalid, expired, or could not be verified. Request a new code if needed.')}finally{verifyBtn.disabled=false}});
-newPasswordForm.addEventListener('submit',async e=>{e.preventDefault();if(!recoveryVerified){showRecovery('Verify the recovery OTP before changing the password.');return}const password=document.getElementById('newPassword').value,confirm=document.getElementById('confirmNewPassword').value;if(password.length<8){showRecovery('Password must contain at least 8 characters.');return}if(password!==confirm){showRecovery('Passwords do not match.');return}const updateBtn=document.getElementById('updatePasswordBtn');updateBtn.disabled=true;showRecovery('Updating password securely…',true);try{const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();if(sessionError)throw sessionError;if(!sessionData.session)throw new Error('Recovery session is missing. Verify the OTP again.');const {error}=await supabaseClient.auth.updateUser({password});if(error)throw error;const {error:signOutError}=await supabaseClient.auth.signOut();recoveryVerified=Boolean(signOutError);newPasswordForm.hidden=true;showRecovery(signOutError?'Password updated, but automatic sign-out failed. Close this page and sign out before continuing.':'Password updated successfully. You can now sign in with your new password.',!signOutError);const link=document.getElementById('backToLogin');link.textContent='Return to Login';link.onclick=event=>{event.preventDefault();location.replace('document-locker-login.html')};}catch(err){showRecovery('Password could not be updated. The recovery session may have expired; request a new OTP and try again.')}finally{updateBtn.disabled=false}});
-</script>
 </head>
 <body>
 <div class="wrap">
@@ -57,7 +43,7 @@ newPasswordForm.addEventListener('submit',async e=>{e.preventDefault();if(!recov
 </form>
 <section id="recoveryPanel" aria-labelledby="recoveryTitle" hidden>
 <h1 class="recovery-title" id="recoveryTitle">Reset your password</h1>
-<p>Choose one recovery method. A valid OTP from that method alone is sufficient.</p>
+<p>Choose one recovery method.</p>
 <div class="method-row">
 <button type="button" class="method" id="emailMethod" aria-pressed="true">Reset using Email OTP</button>
 <button type="button" class="method" id="mobileMethod" aria-pressed="false">Reset using Mobile OTP</button>
@@ -82,5 +68,291 @@ newPasswordForm.addEventListener('submit',async e=>{e.preventDefault();if(!recov
 <div class="links" id="loginLinks"><a href="document-locker-register.html">Create Account</a> · <a href="document-locker.html">Locker Home</a></div>
 </main>
 </div>
+<script>
+(function loadSupabaseOnce() {
+  const loader = document.createElement('script');
+  loader.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  loader.async = true;
+  loader.onload = initializeLocker;
+  loader.onerror = function () {
+    const message = document.getElementById('message');
+    message.hidden = false;
+    message.textContent = 'The secure sign-in service could not be loaded. Check your connection and reload this page.';
+  };
+  document.head.appendChild(loader);
+})();
+
+function initializeLocker() {
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    const message = document.getElementById('message');
+    message.hidden = false;
+    message.textContent = 'The secure sign-in service is unavailable. Please reload and try again.';
+    return;
+  }
+
+  const SUPABASE_URL = 'https://nnwbezwnwxybwwnhaetw.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  const loginForm = document.getElementById('loginForm');
+  const loginMessage = document.getElementById('message');
+  const loginButton = document.getElementById('loginBtn');
+  const recoveryPanel = document.getElementById('recoveryPanel');
+  const loginLinks = document.getElementById('loginLinks');
+  const recoveryMessage = document.getElementById('recoveryMessage');
+  const emailMethod = document.getElementById('emailMethod');
+  const mobileMethod = document.getElementById('mobileMethod');
+  const emailRecoveryForm = document.getElementById('emailRecoveryForm');
+  const verifyOtpForm = document.getElementById('verifyOtpForm');
+  const newPasswordForm = document.getElementById('newPasswordForm');
+  const sendOtpButton = document.getElementById('sendOtpBtn');
+  const verifyOtpButton = document.getElementById('verifyOtpBtn');
+  const updatePasswordButton = document.getElementById('updatePasswordBtn');
+
+  let recoveryEmail = '';
+  let otpSent = false;
+  let recoveryVerified = false;
+  let resendTimer = null;
+  let resendAvailableAt = 0;
+
+  function showLoginMessage(message, success = false) {
+    loginMessage.hidden = false;
+    loginMessage.textContent = message;
+    loginMessage.style.color = success ? '#087c18' : '#a00000';
+  }
+
+  function showRecoveryMessage(message, success = false) {
+    recoveryMessage.hidden = false;
+    recoveryMessage.textContent = message;
+    recoveryMessage.style.color = success ? '#087c18' : '#a00000';
+  }
+
+  function clearResendCooldown() {
+    if (resendTimer !== null) window.clearInterval(resendTimer);
+    resendTimer = null;
+    resendAvailableAt = 0;
+    sendOtpButton.disabled = false;
+    sendOtpButton.textContent = 'Send Email OTP';
+  }
+
+  function startResendCooldown() {
+    if (resendTimer !== null) window.clearInterval(resendTimer);
+    resendAvailableAt = Date.now() + 60000;
+    const updateCountdown = function () {
+      const seconds = Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000));
+      sendOtpButton.textContent = seconds ? 'Resend available in ' + seconds + 's' : 'Resend Email OTP';
+      sendOtpButton.disabled = seconds > 0;
+      if (seconds === 0 && resendTimer !== null) {
+        window.clearInterval(resendTimer);
+        resendTimer = null;
+      }
+    };
+    updateCountdown();
+    resendTimer = window.setInterval(updateCountdown, 1000);
+  }
+
+  function showLogin() {
+    recoveryPanel.hidden = true;
+    loginForm.hidden = false;
+    loginLinks.hidden = false;
+    loginMessage.hidden = true;
+    recoveryMessage.hidden = true;
+    clearResendCooldown();
+    recoveryEmail = '';
+    otpSent = false;
+    recoveryVerified = false;
+    verifyOtpForm.hidden = true;
+    newPasswordForm.hidden = true;
+    emailRecoveryForm.hidden = false;
+    document.getElementById('recoveryOtp').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmNewPassword').value = '';
+  }
+
+  function openRecovery() {
+    loginForm.hidden = true;
+    loginLinks.hidden = true;
+    recoveryPanel.hidden = false;
+    recoveryMessage.hidden = true;
+    document.getElementById('recoveryEmail').value = document.getElementById('email').value.trim();
+    document.getElementById('recoveryEmail').focus();
+  }
+
+  function selectMethod(method) {
+    if (recoveryVerified) {
+      showRecoveryMessage('Finish resetting your password or return to Login to end the recovery session.');
+      return;
+    }
+    const useEmail = method === 'email';
+    emailMethod.setAttribute('aria-pressed', String(useEmail));
+    mobileMethod.setAttribute('aria-pressed', String(!useEmail));
+    emailRecoveryForm.hidden = !useEmail;
+    verifyOtpForm.hidden = true;
+    newPasswordForm.hidden = true;
+    otpSent = false;
+    if (useEmail) {
+      showRecoveryMessage('Enter the email address registered with your account.', true);
+    } else {
+      showRecoveryMessage('Mobile OTP recovery is unavailable because verified Supabase Phone Auth and SMS provider configuration have not been confirmed. No SMS will be sent.');
+    }
+  }
+
+  document.getElementById('forgotLink').addEventListener('click', function (event) {
+    event.preventDefault();
+    openRecovery();
+  });
+
+  document.getElementById('backToLogin').addEventListener('click', async function (event) {
+    event.preventDefault();
+    if (recoveryVerified) {
+      try {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) throw error;
+        recoveryVerified = false;
+      } catch (error) {
+        showRecoveryMessage('Could not safely end the recovery session. Please retry before returning to Login.');
+        return;
+      }
+    }
+    showLogin();
+  });
+
+  emailMethod.addEventListener('click', function () { selectMethod('email'); });
+  mobileMethod.addEventListener('click', function () { selectMethod('mobile'); });
+
+  loginForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    loginButton.disabled = true;
+    showLoginMessage('Signing in…', true);
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      });
+      if (error) throw error;
+      if (!data || !data.session) throw new Error('No authenticated session was created.');
+      window.location.replace('document-locker-dashboard.html');
+    } catch (error) {
+      showLoginMessage(error.message || 'Login failed. Please check your credentials and email verification status.');
+    } finally {
+      loginButton.disabled = false;
+    }
+  });
+
+  emailRecoveryForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (sendOtpButton.disabled) return;
+    recoveryEmail = document.getElementById('recoveryEmail').value.trim().toLowerCase();
+    if (!recoveryEmail) {
+      showRecoveryMessage('Enter your registered email address.');
+      return;
+    }
+    sendOtpButton.disabled = true;
+    showRecoveryMessage('Requesting recovery code…', true);
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(recoveryEmail, {
+        redirectTo: new URL('document-locker-login.html', window.location.href).href
+      });
+      if (error) throw error;
+      otpSent = true;
+      verifyOtpForm.hidden = false;
+      showRecoveryMessage('If an account matches that address, a recovery code will be sent. Check your inbox and spam folder. OTP-only recovery requires the Supabase Password Recovery email template to use {{ .Token }}.', true);
+      startResendCooldown();
+    } catch (error) {
+      showRecoveryMessage('If this account is eligible, recovery instructions may be sent. Please wait before retrying.');
+      sendOtpButton.disabled = false;
+      sendOtpButton.textContent = 'Send Email OTP';
+    }
+  });
+
+  verifyOtpForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!otpSent) {
+      showRecoveryMessage('Request an OTP first.');
+      return;
+    }
+    const token = document.getElementById('recoveryOtp').value.trim();
+    if (!/^[0-9]{6,8}$/.test(token)) {
+      showRecoveryMessage('Enter the OTP from your recovery email.');
+      return;
+    }
+    verifyOtpButton.disabled = true;
+    showRecoveryMessage('Verifying OTP…', true);
+    try {
+      const { data, error } = await supabaseClient.auth.verifyOtp({
+        email: recoveryEmail,
+        token: token,
+        type: 'recovery'
+      });
+      if (error) throw error;
+      if (!data || !data.session || !data.user) {
+        throw new Error('Recovery verification did not create an authenticated session.');
+      }
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session || sessionData.session.user.id !== data.user.id) {
+        throw new Error('The active recovery session could not be confirmed.');
+      }
+      recoveryVerified = true;
+      verifyOtpForm.hidden = true;
+      newPasswordForm.hidden = false;
+      showRecoveryMessage('Email OTP verified. Choose a new password.', true);
+      document.getElementById('newPassword').focus();
+    } catch (error) {
+      showRecoveryMessage('The OTP is invalid, expired, or could not be verified. Request a new code if needed.');
+    } finally {
+      verifyOtpButton.disabled = false;
+    }
+  });
+
+  newPasswordForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!recoveryVerified) {
+      showRecoveryMessage('Verify the recovery OTP before changing the password.');
+      return;
+    }
+    const password = document.getElementById('newPassword').value;
+    const confirmation = document.getElementById('confirmNewPassword').value;
+    if (password.length < 8) {
+      showRecoveryMessage('Password must contain at least 8 characters.');
+      return;
+    }
+    if (password !== confirmation) {
+      showRecoveryMessage('Passwords do not match.');
+      return;
+    }
+    updatePasswordButton.disabled = true;
+    showRecoveryMessage('Updating password securely…', true);
+    try {
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session || !sessionData.session.user) {
+        throw new Error('Recovery session is missing. Verify the OTP again.');
+      }
+      const { error } = await supabaseClient.auth.updateUser({ password: password });
+      if (error) throw error;
+      const { error: signOutError } = await supabaseClient.auth.signOut();
+      if (signOutError) {
+        recoveryVerified = true;
+        showRecoveryMessage('Password updated, but automatic sign-out failed. Use Back to Login to retry ending the recovery session.');
+        return;
+      }
+      recoveryVerified = false;
+      newPasswordForm.hidden = true;
+      showRecoveryMessage('Password updated successfully. You can now sign in with your new password.', true);
+      const backLink = document.getElementById('backToLogin');
+      backLink.textContent = 'Return to Login';
+      backLink.onclick = function (event) {
+        event.preventDefault();
+        showLogin();
+      };
+    } catch (error) {
+      showRecoveryMessage('Password could not be updated. The recovery session may have expired; request a new OTP and try again.');
+    } finally {
+      updatePasswordButton.disabled = false;
+    }
+  });
+}
+</script>
 </body>
 </html>
