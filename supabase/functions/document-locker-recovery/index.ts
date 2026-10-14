@@ -104,12 +104,19 @@ Deno.serve(async (req) => {
     const hash = await sha(ticket);
     const { data: t } = await service.from("document_recovery_tickets").select("ticket_hash,user_id,recovery_request_id,expires_at,used_at").eq("ticket_hash",hash).maybeSingle();
     if (!t || t.used_at || new Date(t.expires_at).getTime() < Date.now()) return json({ error: "Recovery session expired or invalid. Start again." }, 400);
-    const { data: consumed } = await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",hash).is("used_at",null).gt("expires_at",new Date().toISOString()).select("user_id,recovery_request_id");
-    if (!consumed?.length) return json({ error: "Recovery session expired or invalid. Start again." }, 400);
+    const now = new Date().toISOString();
+    const { data: claimed } = await service.from("document_recovery_tickets").update({ processing_at: now }).eq("ticket_hash",hash).is("used_at",null).is("processing_at",null).gt("expires_at",now).select("user_id,recovery_request_id");
+    if (!claimed?.length) return json({ error: "Recovery session expired, invalid, or already in use. If a server interruption occurred, contact support rather than retrying this ticket." }, 400);
     const { error } = await service.auth.admin.updateUserById(t.user_id, { password });
     if (error) {
+      await service.from("document_recovery_tickets").update({ processing_at: null }).eq("ticket_hash",hash).is("used_at",null);
       await audit("recovery_password_update_failed",t.user_id,t.recovery_request_id);
-      return json({ error: "Password could not be updated. Start a new recovery attempt." }, 400);
+      return json({ error: "Password could not be updated. You may retry this recovery session shortly." }, 400);
+    }
+    const { error: finalizeError } = await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString(), processing_at: null }).eq("ticket_hash",hash).is("used_at",null).not("processing_at","is",null);
+    if (finalizeError) {
+      console.error("ticket finalize failed after password update", { code: finalizeError.code });
+      return json({ error: "Password update succeeded but recovery finalization needs administrator attention. Do not retry this ticket." }, 500);
     }
     if (t.recovery_request_id) {
       await service.from("document_recovery_requests").update({ completed_at: new Date().toISOString() }).eq("id",t.recovery_request_id).eq("status","approved");
