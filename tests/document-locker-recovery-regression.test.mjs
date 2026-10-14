@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const login = await readFile(new URL("../../document-locker-login.html", import.meta.url), "utf8");
-const dashboard = await readFile(new URL("../../document-locker-dashboard.html", import.meta.url), "utf8");
-const recovery = await readFile(new URL("../../document-locker-recovery.html", import.meta.url), "utf8");
-const settings = await readFile(new URL("../../document-locker-recovery-settings.html", import.meta.url), "utf8");
+const login = await readFile(new URL("../document-locker-login.html", import.meta.url), "utf8");
+const dashboard = await readFile(new URL("../document-locker-dashboard.html", import.meta.url), "utf8");
+const recovery = await readFile(new URL("../document-locker-recovery.html", import.meta.url), "utf8");
+const settings = await readFile(new URL("../document-locker-recovery-settings.html", import.meta.url), "utf8");
 
 test("existing Email OTP password recovery remains present", () => {
   assert.match(login, /resetPasswordForEmail/);
