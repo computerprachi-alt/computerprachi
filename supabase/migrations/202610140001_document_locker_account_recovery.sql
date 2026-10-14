@@ -88,3 +88,23 @@ revoke all on function public.document_recovery_record_attempt(text, boolean) fr
 grant execute on function public.document_recovery_record_attempt(text, boolean) to service_role;
 
 comment on table public.document_recovery_requests is 'PII retention: purge rejected/expired requests and identity fields after 30 days; retain only non-identifying audit metadata as required.';
+
+-- Invoke daily from a trusted scheduler (e.g. Supabase Cron if enabled) or an operator-run
+-- maintenance job. This deletes identity-bearing requests after 30 days; audit rows retain
+-- only event type, opaque IDs, actor IDs and timestamps.
+create or replace function public.purge_document_recovery_requests()
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare removed integer;
+begin
+  delete from public.document_recovery_requests
+    where created_at < now() - interval '30 days'
+       or expires_at < now() - interval '30 days';
+  get diagnostics removed = row_count;
+  delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
+  delete from public.document_recovery_tickets where expires_at < now() or used_at is not null;
+  return removed;
+end $$;
+revoke all on function public.purge_document_recovery_requests() from public, anon, authenticated;
+grant execute on function public.purge_document_recovery_requests() to service_role;
