@@ -1,0 +1,22 @@
+name: Document Locker Recovery Checks
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/document-locker-recovery/**"
+      - "supabase/migrations/*document_locker_account_recovery.sql"
+      - ".github/workflows/document-locker-recovery.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deno-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check recovery Edge Function and tests
+        run: deno check supabase/functions/document-locker-recovery/index.ts supabase/functions/document-locker-recovery/index.test.ts
+      - name: Run staging integration tests (safe-skipped without explicit staging variables)
+        run: deno test --allow-env --allow-net supabase/functions/document-locker-recovery/index.test.ts
