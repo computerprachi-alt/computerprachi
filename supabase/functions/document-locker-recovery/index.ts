@@ -35,7 +35,8 @@ async function rate(key: string) {
   return !error && !!data?.[0]?.allowed;
 }
 async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}) {
-  const { error } = await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });\n  if (error) console.error("recovery audit write failed", { event_type, code: error.code });
+  const { error } = await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });
+  if (error) console.error("recovery audit write failed", { event_type, code: error.code });
 }
 function validEmail(v: string) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
