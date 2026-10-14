@@ -8,7 +8,7 @@ import { assert, assertEquals, assertExists, assertNotEquals } from "jsr:@std/as
 const base = Deno.env.get("RECOVERY_TEST_BASE_URL")?.replace(/\/$/, "");
 const anon = Deno.env.get("RECOVERY_TEST_ANON_KEY");
 const userToken = Deno.env.get("RECOVERY_TEST_USER_ACCESS_TOKEN");
-const enabled = Boolean(base && anon && userToken && !/computerprachi\.online/i.test(base));
+const enabled = Boolean(Deno.env.get("RECOVERY_TEST_ALLOW_STAGING") === "YES" && base && anon && userToken && !/nnwbezwnwxybwwnhaetw\.supabase\.co|computerprachi\.online/i.test(base));
 const newPassword = Deno.env.get("RECOVERY_TEST_NEW_PASSWORD");
 
 async function invoke(action: string, payload: Record<string, unknown> = {}, token?: string) {
