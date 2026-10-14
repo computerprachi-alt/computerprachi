@@ -1,0 +1,136 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const url = Deno.env.get("SUPABASE_URL")!;
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const adminEmails = (Deno.env.get("RECOVERY_ADMIN_EMAILS") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
+const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "https://computerprachi.online", "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
+const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))).map(b => b.toString(16).padStart(2,"0")).join("");
+const randomToken = (n = 32) => { const b = crypto.getRandomValues(new Uint8Array(n)); return Array.from(b).map(x => x.toString(16).padStart(2,"0")).join(""); };
+const clean = (s: unknown, max = 180) => typeof s === "string" ? s.trim().replace(/[\u0000-\u001f\u007f]/g, "").slice(0,max) : "";
+async function userFromRequest(req: Request) {
+  const h = req.headers.get("authorization") || "";
+  if (!h.startsWith("Bearer ")) return null;
+  const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: h } } });
+  const { data, error } = await client.auth.getUser();
+  return error || !data.user ? null : data.user;
+}
+async function rate(key: string) {
+  const { data, error } = await service.rpc("document_recovery_record_attempt", { p_attempt_key: await sha(key), p_success: false });
+  return !error && !!data?.[0]?.allowed;
+}
+async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}) {
+  await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });
+}
+function validEmail(v: string) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return json({});
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
+  const action = clean(body.action, 40);
+  const ip = clean(req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "unknown", 100).split(",")[0];
+  if (!(await rate("ip:" + ip))) return json({ error: "Too many attempts. Try again later." }, 429);
+
+  if (action === "issue_code") {
+    const user = await userFromRequest(req);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
+    const code_hash = await sha(code);
+    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    if (error) return json({ error: "Could not create a recovery code. Try again later." }, 500);
+    await audit("recovery_code_issued", user.id, null, user.id);
+    return json({ code, message: "Save this code securely. It is shown only once; regenerating invalidates the previous code." });
+  }
+
+  if (action === "verify_code") {
+    const code = clean(body.code, 120).toUpperCase();
+    if (!/^CPR-(?:[A-F0-9]{5}-){7}[A-F0-9]{5}$/.test(code) || !(await rate("code:" + await sha(code)))) {
+      return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    }
+    const hash = await sha(code);
+    const { data: row } = await service.from("document_recovery_codes").select("user_id,used_at").eq("code_hash", hash).maybeSingle();
+    if (!row || row.used_at) return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    const ticket = randomToken(32), ticket_hash = await sha(ticket);
+    const { error } = await service.from("document_recovery_tickets").insert({ ticket_hash, user_id: row.user_id, expires_at: new Date(Date.now()+10*60*1000).toISOString() });
+    if (error) return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    // Atomically consume the code only after a ticket is created.
+    const { data: consumed, error: consumeError } = await service.from("document_recovery_codes").update({ used_at: new Date().toISOString() }).eq("user_id", row.user_id).eq("code_hash", hash).is("used_at", null).select("user_id");
+    if (consumeError || !consumed?.length) {
+      await service.from("document_recovery_tickets").delete().eq("ticket_hash", ticket_hash);
+      return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    }
+    await audit("recovery_code_verified", row.user_id);
+    return json({ ticket, message: "Code verified. Set a new password now. You can update and verify your email after signing in." });
+  }
+
+  if (action === "submit_request") {
+    const fullName = clean(body.registeredFullName, 120), dob = clean(body.dateOfBirth, 10);
+    const mother = clean(body.motherName, 120), father = clean(body.fatherName, 120), newEmail = clean(body.newEmail, 254).toLowerCase();
+    if (fullName.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(dob) || !validEmail(newEmail)) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
+    const { data: profiles } = await service.from("document_profiles").select("id,full_name,date_of_birth").ilike("full_name", fullName).eq("date_of_birth", dob).limit(2);
+    let matchedUser: string | null = null;
+    if (profiles?.length === 1) {
+      const profile = profiles[0];
+      // Names are signals only, never sufficient proof. Require both parent names to match stored metadata if available.
+      const { data: authData } = await service.auth.admin.getUserById(profile.id);
+      const meta = authData?.user?.user_metadata || {};
+      const parentMatch = !!mother && !!father && clean(meta.mother_name,120).toLowerCase() === mother.toLowerCase() && clean(meta.father_name,120).toLowerCase() === father.toLowerCase();
+      if (parentMatch) matchedUser = profile.id;
+    }
+    const { error } = await service.from("document_recovery_requests").insert({
+      account_user_id: matchedUser, registered_full_name: fullName, date_of_birth: dob,
+      mother_name: mother || null, father_name: father || null, new_email: newEmail
+    });
+    if (error) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
+    await audit("admin_recovery_request_submitted", matchedUser);
+    return json({ message: "Your request has been received for manual review. For your safety, we cannot confirm account matches here. Do not submit identity documents unless an administrator asks through an official channel." });
+  }
+
+  if (action === "complete_recovery") {
+    const ticket = clean(body.ticket, 128), password = typeof body.password === "string" ? body.password : "";
+    if (ticket.length < 40 || password.length < 12 || password.length > 128) return json({ error: "Use a password of at least 12 characters and a valid recovery session." }, 400);
+    const hash = await sha(ticket);
+    const { data: t } = await service.from("document_recovery_tickets").select("ticket_hash,user_id,recovery_request_id,expires_at,used_at").eq("ticket_hash",hash).maybeSingle();
+    if (!t || t.used_at || new Date(t.expires_at).getTime() < Date.now()) return json({ error: "Recovery session expired or invalid. Start again." }, 400);
+    const { data: consumed } = await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",hash).is("used_at",null).gt("expires_at",new Date().toISOString()).select("user_id,recovery_request_id");
+    if (!consumed?.length) return json({ error: "Recovery session expired or invalid. Start again." }, 400);
+    const { error } = await service.auth.admin.updateUserById(t.user_id, { password });
+    if (error) {
+      await audit("recovery_password_update_failed",t.user_id,t.recovery_request_id);
+      return json({ error: "Password could not be updated. Start a new recovery attempt." }, 400);
+    }
+    if (t.recovery_request_id) {
+      await service.from("document_recovery_requests").update({ completed_at: new Date().toISOString() }).eq("id",t.recovery_request_id).eq("status","approved");
+    }
+    await audit("recovery_password_updated",t.user_id,t.recovery_request_id);
+    return json({ message: "Password updated. Sign in with your account email, then change your email in account settings and complete Supabase's email verification before using the new address." });
+  }
+
+  if (action === "admin_list" || action === "admin_decide") {
+    const user = await userFromRequest(req);
+    if (!user?.email || !adminEmails.includes(user.email.toLowerCase())) return json({ error: "Not authorized" }, 403);
+    if (action === "admin_list") {
+      const { data, error } = await service.from("document_recovery_requests").select("id,registered_full_name,date_of_birth,new_email,status,created_at,expires_at").eq("status","pending").order("created_at",{ascending:true}).limit(100);
+      if (error) return json({ error: "Unable to load requests" }, 500);
+      return json({ requests: data || [] });
+    }
+    const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
+    const { data: request } = await service.from("document_recovery_requests").select("id,account_user_id,status,expires_at").eq("id",id).maybeSingle();
+    if (!request || request.status !== "pending" || new Date(request.expires_at).getTime() < Date.now() || (decision === "approved" && !request.account_user_id)) return json({ error: "Request cannot be reviewed or lacks a verified account match." },400);
+    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
+    if (!changed) return json({ error: "Request was already reviewed." },409);
+    if (decision === "approved") {
+      const ticket = randomToken(32);
+      await service.from("document_recovery_tickets").insert({ ticket_hash:await sha(ticket), user_id:changed.account_user_id, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
+      // Deliberately do not return a bearer ticket to the administrator UI. Notify the claimant only after a separate verified channel is configured.
+    }
+    await audit("admin_recovery_request_"+decision,request.account_user_id,id,user.id,{review_notes:notes});
+    return json({ message: "Decision recorded. An approval does not by itself change the account password or email. Contact verification and a claimant-bound ticket delivery channel must be configured before enabling self-service completion." });
+  }
+  return json({ error: "Unknown action" }, 400);
+});
