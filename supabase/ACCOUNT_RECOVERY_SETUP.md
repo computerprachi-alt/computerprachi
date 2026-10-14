@@ -34,3 +34,16 @@ Identity-bearing requests expire after 30 days and are removed by `purge_documen
 - New password login and subsequent email change/verification succeed.
 - Existing Email OTP flow, dashboard navigation and private document operations remain unchanged.
 - Confirm scheduler removes identity data after 30 days.
+
+
+## Security-fix branch update (review carefully)
+- Admin actions now require a confirmed, allowlisted email and an Authenticator Assurance Level of `aal2` from Supabase Auth. This must be verified with a staging account that has enrolled MFA; merely configuring `RECOVERY_ADMIN_EMAILS` is not enough.
+- Rate-attempt RPC now takes a transaction-scoped advisory lock for each hashed attempt key before counting/inserting, preventing parallel requests from sharing the same stale count.
+- Ticket completion claims a ticket using `processing_at IS NULL`; explicit password-update failures release the claim for retry. A server crash during the Auth update can leave the ticket processing and require administrator support. The ticket is deliberately not reclaimed automatically because Auth update outcome may be uncertain and replay could reset the password again.
+- Admin approval now inserts the hashed ticket before conditionally changing the request from Pending. If the compare-and-set status update loses a race, the unused ticket is deleted.
+- Migration now schedules `purge_document_recovery_requests()` daily using Supabase Cron at 03:17 UTC if `pg_cron` is available. After applying in staging, verify the job in `cron.job`, inspect `cron.job_run_details` daily, and alert on failed or missing runs. The SQL migration has not been applied by this PR.
+- Added `index.test.ts` integration tests and a GitHub Actions type-check/test workflow. Tests requiring a real disposable staging user are skipped unless `RECOVERY_TEST_ALLOW_STAGING=YES` plus explicit staging URL/key/user token are set. The test refuses the known production Supabase URL and production website domain.
+- Email change remains a manual authenticated Supabase Auth flow after password recovery. This does **not yet guarantee recovery when the old email confirmation is required by the project's Auth settings**. Do not claim the no-old-email recovery requirement is complete until this exact flow is implemented and tested without weakening email verification.
+- Recovery code is generated from authenticated Recovery Settings, not automatically displayed at registration. If product requirements require first-time code generation during registration, implement and test that separately before marking the full requirement complete.
+- Parent names and date of birth are collected as supporting details, not treated as proof. Current schema does not contain independently verified parent-name fields; admin must use a separate trusted verification process.
+- CI and integration results must be checked on the new PR commit; this local tool session did not run Deno or apply a migration.
