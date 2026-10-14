@@ -1,0 +1,90 @@
+-- Computer Prachi Document Locker account recovery
+-- Apply only after review in a non-production Supabase environment.
+create extension if not exists pgcrypto;
+
+create table if not exists public.document_recovery_codes (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  code_hash text not null,
+  created_at timestamptz not null default now(),
+  used_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.document_recovery_codes enable row level security;
+revoke all on public.document_recovery_codes from anon, authenticated;
+
+create table if not exists public.document_recovery_attempts (
+  id bigint generated always as identity primary key,
+  attempt_key text not null,
+  attempted_at timestamptz not null default now(),
+  succeeded boolean not null default false
+);
+create index if not exists document_recovery_attempts_key_time_idx
+  on public.document_recovery_attempts(attempt_key, attempted_at desc);
+alter table public.document_recovery_attempts enable row level security;
+revoke all on public.document_recovery_attempts from anon, authenticated;
+
+create table if not exists public.document_recovery_requests (
+  id uuid primary key default gen_random_uuid(),
+  account_user_id uuid references auth.users(id) on delete set null,
+  registered_full_name text not null,
+  date_of_birth date,
+  mother_name text,
+  father_name text,
+  new_email text not null,
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  reviewer_user_id uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  review_notes text,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '30 days'),
+  completed_at timestamptz
+);
+create index if not exists document_recovery_requests_status_created_idx
+  on public.document_recovery_requests(status, created_at);
+alter table public.document_recovery_requests enable row level security;
+revoke all on public.document_recovery_requests from anon, authenticated;
+
+create table if not exists public.document_recovery_tickets (
+  ticket_hash text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recovery_request_id uuid references public.document_recovery_requests(id) on delete cascade,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.document_recovery_tickets enable row level security;
+revoke all on public.document_recovery_tickets from anon, authenticated;
+
+create table if not exists public.document_recovery_audit (
+  id bigint generated always as identity primary key,
+  event_type text not null,
+  user_id uuid references auth.users(id) on delete set null,
+  request_id uuid,
+  actor_user_id uuid references auth.users(id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table public.document_recovery_audit enable row level security;
+revoke all on public.document_recovery_audit from anon, authenticated;
+
+-- Private, server-only RPC helpers. Edge Functions use the service role; browser roles cannot call these.
+create or replace function public.document_recovery_record_attempt(p_attempt_key text, p_success boolean default false)
+returns table(allowed boolean, attempts integer)
+language plpgsql security definer set search_path = ''
+as $$
+declare n integer;
+begin
+  if p_attempt_key is null or length(p_attempt_key) < 32 or length(p_attempt_key) > 128 then
+    return query select false, 0; return;
+  end if;
+  delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
+  select count(*)::integer into n from public.document_recovery_attempts
+    where attempt_key = p_attempt_key and attempted_at > now() - interval '15 minutes';
+  if n >= 8 then return query select false, n; return; end if;
+  insert into public.document_recovery_attempts(attempt_key, succeeded) values (p_attempt_key, coalesce(p_success,false));
+  return query select true, n + 1;
+end $$;
+revoke all on function public.document_recovery_record_attempt(text, boolean) from public, anon, authenticated;
+grant execute on function public.document_recovery_record_attempt(text, boolean) to service_role;
+
+comment on table public.document_recovery_requests is 'PII retention: purge rejected/expired requests and identity fields after 30 days; retain only non-identifying audit metadata as required.';
