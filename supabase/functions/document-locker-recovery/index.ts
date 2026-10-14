@@ -134,19 +134,25 @@ Deno.serve(async (req) => {
       const { data: authTarget, error: targetError } = await service.auth.admin.getUserById(verifiedUserId);
       if (targetError || !authTarget?.user) return json({ error: "The verified account could not be found." },400);
     }
-    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, account_user_id:decision === "approved" ? verifiedUserId : null, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
-    if (!changed) return json({ error: "Request was already reviewed." },409);
     let approvedTicket: string | null = null;
+    let ticketHash: string | null = null;
     if (decision === "approved") {
-      const ticket = randomToken(32);
-      approvedTicket = ticket;
-      const { error: ticketError } = await service.from("document_recovery_tickets").insert({ ticket_hash:await sha(ticket), user_id:changed.account_user_id, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
-      if (ticketError) return json({ error: "Approval recorded but a recovery ticket could not be created. Contact the system administrator." },500);
-      await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id);
-      // This one-time bearer ticket is returned only to an allowlisted administrator; relay it to the claimant using an independently verified channel.
+      approvedTicket = randomToken(32);
+      ticketHash = await sha(approvedTicket);
+      const { error: ticketError } = await service.from("document_recovery_tickets").insert({ ticket_hash:ticketHash, user_id:verifiedUserId, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
+      if (ticketError) return json({ error: "Request could not be approved. Contact the system administrator." },500);
     }
-    await audit("admin_recovery_request_"+decision,request.account_user_id,id,user.id);
-    return json(decision === "approved" ? { message: "Approved. Deliver the one-time ticket below to the claimant only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket } : { message: "Request rejected. The claimant receives no recovery ticket." });
+    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, account_user_id:decision === "approved" ? verifiedUserId : null, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
+    if (!changed) {
+      if (ticketHash) await service.from("document_recovery_tickets").delete().eq("ticket_hash",ticketHash).is("used_at",null);
+      return json({ error: "Request was already reviewed." },409);
+    }
+    if (decision === "approved") {
+      await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id);
+      // The raw ticket is returned only once to an allowlisted AAL2 administrator.
+    }
+    await audit("admin_recovery_request_"+decision,changed.account_user_id,id,user.id);
+    return json(decision === "approved" ? { message: "Approved. Deliver the one-time ticket only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket } : { message: "Request rejected. The claimant receives no recovery ticket." });
   }
   return json({ error: "Unknown action" }, 400);
 });
