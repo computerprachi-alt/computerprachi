@@ -10,19 +10,32 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))).map(b => b.toString(16).padStart(2,"0")).join("");
 const randomToken = (n = 32) => { const b = crypto.getRandomValues(new Uint8Array(n)); return Array.from(b).map(x => x.toString(16).padStart(2,"0")).join(""); };
 const clean = (s: unknown, max = 180) => typeof s === "string" ? s.trim().replace(/[\u0000-\u001f\u007f]/g, "").slice(0,max) : "";
-async function userFromRequest(req: Request) {
+async function authContext(req: Request) {
   const h = req.headers.get("authorization") || "";
   if (!h.startsWith("Bearer ")) return null;
   const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: h } } });
   const { data, error } = await client.auth.getUser();
-  return error || !data.user ? null : data.user;
+  if (error || !data.user) return null;
+  return { user: data.user, client };
+}
+async function userFromRequest(req: Request) {
+  return (await authContext(req))?.user ?? null;
+}
+async function requireAdminMfa(req: Request) {
+  const context = await authContext(req);
+  const user = context?.user;
+  if (!user?.email || !user.email_confirmed_at || !adminEmails.includes(user.email.toLowerCase())) return null;
+  // Require a current AAL2 session; allowlist membership alone is not MFA.
+  const { data, error } = await context!.client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || data.currentLevel !== "aal2") return null;
+  return user;
 }
 async function rate(key: string) {
   const { data, error } = await service.rpc("document_recovery_record_attempt", { p_attempt_key: await sha(key), p_success: false });
   return !error && !!data?.[0]?.allowed;
 }
 async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}) {
-  await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });
+  const { error } = await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });\n  if (error) console.error("recovery audit write failed", { event_type, code: error.code });
 }
 function validEmail(v: string) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
