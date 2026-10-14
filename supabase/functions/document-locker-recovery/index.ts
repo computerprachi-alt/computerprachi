@@ -71,9 +71,11 @@ Deno.serve(async (req) => {
     const fullName = clean(body.registeredFullName, 120), dob = clean(body.dateOfBirth, 10);
     const mother = clean(body.motherName, 120), father = clean(body.fatherName, 120), newEmail = clean(body.newEmail, 254).toLowerCase();
     if (fullName.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(dob) || !validEmail(newEmail)) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
-    // Existing schema does not reliably store parent names. Never auto-link an account based on personal details alone.
-    // A human administrator must independently verify ownership and explicitly supply the target auth user ID.
-    const matchedUser: string | null = null;
+    // Match registered name and DOB to create an internal candidate only. This is not proof of ownership
+    // and cannot approve the request. The administrator must independently verify ownership and explicitly
+    // supply the target Auth user UUID when approving. Parent names are not stored in the current profile schema.
+    const { data: candidates } = await service.from("document_profiles").select("id").ilike("full_name", fullName).eq("date_of_birth", dob).limit(2);
+    const matchedUser: string | null = candidates?.length === 1 ? candidates[0].id : null;
     const { error } = await service.from("document_recovery_requests").insert({
       account_user_id: matchedUser, registered_full_name: fullName, date_of_birth: dob,
       mother_name: mother || null, father_name: father || null, new_email: newEmail
