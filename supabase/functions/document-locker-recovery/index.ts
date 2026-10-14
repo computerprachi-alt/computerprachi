@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     const user = await userFromRequest(req);
     if (!user?.email || !adminEmails.includes(user.email.toLowerCase())) return json({ error: "Not authorized" }, 403);
     if (action === "admin_list") {
-      const { data, error } = await service.from("document_recovery_requests").select("id,registered_full_name,date_of_birth,new_email,status,created_at,expires_at").eq("status","pending").order("created_at",{ascending:true}).limit(100);
+      const { data, error } = await service.from("document_recovery_requests").select("id,registered_full_name,date_of_birth,mother_name,father_name,new_email,status,created_at,expires_at").eq("status","pending").order("created_at",{ascending:true}).limit(100);
       if (error) return json({ error: "Unable to load requests" }, 500);
       return json({ requests: data || [] });
     }
