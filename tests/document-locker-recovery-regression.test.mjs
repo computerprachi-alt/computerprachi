@@ -23,8 +23,8 @@ test("login and dashboard recovery navigation exists", () => {
 test("private document access keeps owner checks and private bucket usage", () => {
   assert.match(dashboard, /function openPrivateDocument/);
   assert.match(dashboard, /\.eq\('user_id',currentUser\.id\)/);
-  assert.match(dashboard, /createSignedUrl/);
-  assert.match(dashboard, /download\s*:/);
+  assert.match(dashboard, /\.download\(doc\.storage_path\)/);
+  assert.match(dashboard, /a\.download=doc\.document_name/);
   assert.match(dashboard, /function deletePrivateDocument/);
   assert.match(dashboard, /storage\.from\(['"]education-documents['"]\)/);
 });
