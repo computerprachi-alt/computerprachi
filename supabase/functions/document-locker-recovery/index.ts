@@ -71,16 +71,9 @@ Deno.serve(async (req) => {
     const fullName = clean(body.registeredFullName, 120), dob = clean(body.dateOfBirth, 10);
     const mother = clean(body.motherName, 120), father = clean(body.fatherName, 120), newEmail = clean(body.newEmail, 254).toLowerCase();
     if (fullName.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(dob) || !validEmail(newEmail)) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
-    const { data: profiles } = await service.from("document_profiles").select("id,full_name,date_of_birth").ilike("full_name", fullName).eq("date_of_birth", dob).limit(2);
-    let matchedUser: string | null = null;
-    if (profiles?.length === 1) {
-      const profile = profiles[0];
-      // Names are signals only, never sufficient proof. Require both parent names to match stored metadata if available.
-      const { data: authData } = await service.auth.admin.getUserById(profile.id);
-      const meta = authData?.user?.user_metadata || {};
-      const parentMatch = !!mother && !!father && clean(meta.mother_name,120).toLowerCase() === mother.toLowerCase() && clean(meta.father_name,120).toLowerCase() === father.toLowerCase();
-      if (parentMatch) matchedUser = profile.id;
-    }
+    // Existing schema does not reliably store parent names. Never auto-link an account based on personal details alone.
+    // A human administrator must independently verify ownership and explicitly supply the target auth user ID.
+    const matchedUser: string | null = null;
     const { error } = await service.from("document_recovery_requests").insert({
       account_user_id: matchedUser, registered_full_name: fullName, date_of_birth: dob,
       mother_name: mother || null, father_name: father || null, new_email: newEmail
@@ -118,19 +111,25 @@ Deno.serve(async (req) => {
       if (error) return json({ error: "Unable to load requests" }, 500);
       return json({ requests: data || [] });
     }
-    const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500);
+    const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500), verifiedUserId = clean(body.verifiedUserId, 50);
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
     const { data: request } = await service.from("document_recovery_requests").select("id,account_user_id,status,expires_at").eq("id",id).maybeSingle();
-    if (!request || request.status !== "pending" || new Date(request.expires_at).getTime() < Date.now() || (decision === "approved" && !request.account_user_id)) return json({ error: "Request cannot be reviewed or lacks a verified account match." },400);
-    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
+    if (!request || request.status !== "pending" || new Date(request.expires_at).getTime() < Date.now() || (decision === "approved" && !/^[0-9a-f-]{36}$/i.test(verifiedUserId))) return json({ error: "Request cannot be reviewed or lacks an administrator-verified account match." },400);
+    if (decision === "approved") {
+      const { data: authTarget, error: targetError } = await service.auth.admin.getUserById(verifiedUserId);
+      if (targetError || !authTarget?.user) return json({ error: "The verified account could not be found." },400);
+    }
+    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, account_user_id:decision === "approved" ? verifiedUserId : null, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
     if (!changed) return json({ error: "Request was already reviewed." },409);
     if (decision === "approved") {
       const ticket = randomToken(32);
-      await service.from("document_recovery_tickets").insert({ ticket_hash:await sha(ticket), user_id:changed.account_user_id, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
-      // Deliberately do not return a bearer ticket to the administrator UI. Notify the claimant only after a separate verified channel is configured.
+      const { error: ticketError } = await service.from("document_recovery_tickets").insert({ ticket_hash:await sha(ticket), user_id:changed.account_user_id, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
+      if (ticketError) return json({ error: "Approval recorded but a recovery ticket could not be created. Contact the system administrator." },500);
+      await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id);
+      // This one-time bearer ticket is returned only to an allowlisted administrator; relay it to the claimant using an independently verified channel.
     }
     await audit("admin_recovery_request_"+decision,request.account_user_id,id,user.id,{review_notes:notes});
-    return json({ message: "Decision recorded. An approval does not by itself change the account password or email. Contact verification and a claimant-bound ticket delivery channel must be configured before enabling self-service completion." });
+    return json(decision === "approved" ? { message: "Approved. Deliver the one-time ticket below to the claimant only through an independently verified channel. It expires in 24 hours.", ticket } : { message: "Request rejected. The claimant receives no recovery ticket." });
   }
   return json({ error: "Unknown action" }, 400);
 });
