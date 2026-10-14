@@ -50,6 +50,7 @@ create table if not exists public.document_recovery_tickets (
   recovery_request_id uuid references public.document_recovery_requests(id) on delete cascade,
   expires_at timestamptz not null,
   used_at timestamptz,
+  processing_at timestamptz,
   created_at timestamptz not null default now()
 );
 alter table public.document_recovery_tickets enable row level security;
@@ -77,6 +78,8 @@ begin
   if p_attempt_key is null or length(p_attempt_key) < 32 or length(p_attempt_key) > 128 then
     return query select false, 0; return;
   end if;
+  -- Serialize each key so concurrent requests cannot all pass the same count.
+  perform pg_advisory_xact_lock(hashtextextended(p_attempt_key, 0));
   delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
   select count(*)::integer into n from public.document_recovery_attempts
     where attempt_key = p_attempt_key and attempted_at > now() - interval '15 minutes';
@@ -89,9 +92,8 @@ grant execute on function public.document_recovery_record_attempt(text, boolean)
 
 comment on table public.document_recovery_requests is 'PII retention: purge rejected/expired requests and identity fields after 30 days; retain only non-identifying audit metadata as required.';
 
--- Invoke daily from a trusted scheduler (e.g. Supabase Cron if enabled) or an operator-run
--- maintenance job. This deletes identity-bearing requests after 30 days; audit rows retain
--- only event type, opaque IDs, actor IDs and timestamps.
+-- Daily trusted scheduler and monitoring. Review failures in cron.job_run_details.
+create extension if not exists pg_cron with schema pg_catalog;
 create or replace function public.purge_document_recovery_requests()
 returns integer
 language plpgsql security definer set search_path = ''
@@ -108,3 +110,11 @@ begin
 end $$;
 revoke all on function public.purge_document_recovery_requests() from public, anon, authenticated;
 grant execute on function public.purge_document_recovery_requests() to service_role;
+
+-- Schedule once after verifying pg_cron is enabled for the project.
+do $$
+begin
+  if not exists (select 1 from cron.job where jobname = 'document-recovery-daily-cleanup') then
+    perform cron.schedule('document-recovery-daily-cleanup', '17 3 * * *', 'select public.purge_document_recovery_requests();');
+  end if;
+end $$;
