@@ -83,3 +83,19 @@ Deno.test({ name: "allowlisted staging administrator with an AAL2 session can ac
   assertEquals(response.status, 200, "the staging admin token must belong to an allowlisted, email-confirmed AAL2 administrator");
   assertExists(body.requests);
 }});
+
+
+Deno.test({ name: "first-login onboarding status requires authentication and never returns a Recovery Code", ignore: !enabled, fn: async () => {
+  const denied = await invoke("onboarding_status");
+  assertEquals(denied.response.status, 401);
+  const { response, body } = await invoke("onboarding_status", {}, userToken!);
+  assertEquals(response.status, 200);
+  assertEquals(typeof body.needsSetup, "boolean");
+  assertEquals("code" in body, false);
+  assertEquals("code_hash" in body, false);
+}});
+
+Deno.test({ name: "onboarding confirmation rejects a malformed Recovery Code", ignore: !enabled, fn: async () => {
+  const { response } = await invoke("complete_code_onboarding", { code: "not-a-recovery-code" }, userToken!);
+  assertEquals(response.status, 400);
+}});
