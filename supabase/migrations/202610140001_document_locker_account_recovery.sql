@@ -221,6 +221,7 @@ begin
          or expires_at < now() - interval '30 days';
     get diagnostics removed = row_count;
     delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
+    delete from public.document_recovery_codes where expires_at < now() or used_at is not null;
     delete from public.document_recovery_tickets where expires_at < now() or used_at is not null;
     update public.document_recovery_cleanup_runs
       set finished_at = now(), deleted_requests = removed, status = 'succeeded'
