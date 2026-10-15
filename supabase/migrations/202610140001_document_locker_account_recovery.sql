@@ -186,3 +186,50 @@ revoke all on public.document_recovery_reconciliation from public, anon, authent
 -- One stored code hash must map to at most one account, protecting atomic redemption assumptions.
 create unique index if not exists document_recovery_codes_code_hash_uidx
   on public.document_recovery_codes(code_hash);
+
+
+-- Record cleanup outcomes for operational monitoring. Cron job history remains the scheduler-level signal.
+create table if not exists public.document_recovery_cleanup_runs (
+  id bigint generated always as identity primary key,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  deleted_requests integer not null default 0,
+  status text not null check (status in ('running','succeeded','failed')),
+  error_code text
+);
+alter table public.document_recovery_cleanup_runs enable row level security;
+revoke all on public.document_recovery_cleanup_runs from public, anon, authenticated;
+
+create or replace function public.purge_document_recovery_requests()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  run_id bigint;
+  removed integer := 0;
+begin
+  insert into public.document_recovery_cleanup_runs(status)
+    values ('running') returning id into run_id;
+  begin
+    delete from public.document_recovery_requests
+      where created_at < now() - interval '30 days'
+         or expires_at < now() - interval '30 days';
+    get diagnostics removed = row_count;
+    delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
+    delete from public.document_recovery_tickets where expires_at < now() or used_at is not null;
+    update public.document_recovery_cleanup_runs
+      set finished_at = now(), deleted_requests = removed, status = 'succeeded'
+      where id = run_id;
+    return removed;
+  exception when others then
+    update public.document_recovery_cleanup_runs
+      set finished_at = now(), status = 'failed', error_code = sqlstate
+      where id = run_id;
+    raise;
+  end;
+end;
+$$;
+revoke all on function public.purge_document_recovery_requests() from public, anon, authenticated;
+grant execute on function public.purge_document_recovery_requests() to service_role;
