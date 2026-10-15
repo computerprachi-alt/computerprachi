@@ -59,12 +59,14 @@ jobs:
           RECOVERY_TEST_BASE_URL: ${{ vars.RECOVERY_TEST_BASE_URL }}
           RECOVERY_TEST_ANON_KEY: ${{ secrets.RECOVERY_TEST_ANON_KEY }}
           RECOVERY_TEST_USER_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_USER_ACCESS_TOKEN }}
+          RECOVERY_TEST_ADMIN_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_ADMIN_ACCESS_TOKEN }}
         run: |
           set +x
           test "$RECOVERY_TEST_ALLOW_STAGING" = "YES" || { echo "Staging opt-in variable must be YES."; exit 1; }
           test -n "$RECOVERY_TEST_BASE_URL" || { echo "Staging URL is missing."; exit 1; }
           test -n "$RECOVERY_TEST_ANON_KEY" || { echo "Staging anon key is missing."; exit 1; }
           test -n "$RECOVERY_TEST_USER_ACCESS_TOKEN" || { echo "Staging test-user token is missing."; exit 1; }
+          test -n "$RECOVERY_TEST_ADMIN_ACCESS_TOKEN" || { echo "Staging AAL2 administrator token is missing."; exit 1; }
           if [[ ! "$RECOVERY_TEST_BASE_URL" =~ ^https://[a-z0-9-]+\.supabase\.co$ ]] ||
              [[ "$RECOVERY_TEST_BASE_URL" =~ nnwbezwnwxybwwnhaetw\.supabase\.co|computerprachi\.online ]]; then
             echo "Refusing a non-staging or known production URL."
@@ -80,5 +82,6 @@ jobs:
           RECOVERY_TEST_BASE_URL: ${{ vars.RECOVERY_TEST_BASE_URL }}
           RECOVERY_TEST_ANON_KEY: ${{ secrets.RECOVERY_TEST_ANON_KEY }}
           RECOVERY_TEST_USER_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_USER_ACCESS_TOKEN }}
+          RECOVERY_TEST_ADMIN_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_ADMIN_ACCESS_TOKEN }}
           RECOVERY_TEST_NEW_PASSWORD: ${{ secrets.RECOVERY_TEST_NEW_PASSWORD }}
         run: deno test --allow-env --allow-net supabase/functions/document-locker-recovery/index.test.ts
