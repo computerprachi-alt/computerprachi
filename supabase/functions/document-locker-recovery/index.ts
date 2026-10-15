@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: "Authentication required" }, 401);
     const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
     const code_hash = await sha(code);
-    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() });
     if (error) return json({ error: "Could not create a recovery code. Try again later." }, 500);
     if (!(await audit("recovery_code_issued", user.id, null, user.id))) {
       await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
