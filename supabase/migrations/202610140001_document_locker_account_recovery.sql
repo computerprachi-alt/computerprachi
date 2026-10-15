@@ -10,7 +10,7 @@ create table if not exists public.document_recovery_codes (
   updated_at timestamptz not null default now()
 );
 alter table public.document_recovery_codes enable row level security;
-revoke all on public.document_recovery_codes from anon, authenticated;
+revoke all on public.document_recovery_codes from public, anon, authenticated;
 
 create table if not exists public.document_recovery_attempts (
   id bigint generated always as identity primary key,
@@ -21,7 +21,7 @@ create table if not exists public.document_recovery_attempts (
 create index if not exists document_recovery_attempts_key_time_idx
   on public.document_recovery_attempts(attempt_key, attempted_at desc);
 alter table public.document_recovery_attempts enable row level security;
-revoke all on public.document_recovery_attempts from anon, authenticated;
+revoke all on public.document_recovery_attempts from public, anon, authenticated;
 
 create table if not exists public.document_recovery_requests (
   id uuid primary key default gen_random_uuid(),
@@ -42,7 +42,7 @@ create table if not exists public.document_recovery_requests (
 create index if not exists document_recovery_requests_status_created_idx
   on public.document_recovery_requests(status, created_at);
 alter table public.document_recovery_requests enable row level security;
-revoke all on public.document_recovery_requests from anon, authenticated;
+revoke all on public.document_recovery_requests from public, anon, authenticated;
 
 create table if not exists public.document_recovery_tickets (
   ticket_hash text primary key,
@@ -54,7 +54,7 @@ create table if not exists public.document_recovery_tickets (
   created_at timestamptz not null default now()
 );
 alter table public.document_recovery_tickets enable row level security;
-revoke all on public.document_recovery_tickets from anon, authenticated;
+revoke all on public.document_recovery_tickets from public, anon, authenticated;
 
 create table if not exists public.document_recovery_audit (
   id bigint generated always as identity primary key,
@@ -66,7 +66,7 @@ create table if not exists public.document_recovery_audit (
   created_at timestamptz not null default now()
 );
 alter table public.document_recovery_audit enable row level security;
-revoke all on public.document_recovery_audit from anon, authenticated;
+revoke all on public.document_recovery_audit from public, anon, authenticated;
 
 -- Private, server-only RPC helpers. Edge Functions use the service role; browser roles cannot call these.
 create or replace function public.document_recovery_record_attempt(p_attempt_key text, p_success boolean default false)
