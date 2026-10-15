@@ -124,7 +124,7 @@ test("new registration, email-confirmation redirect, login, and dashboard enforc
   assert.match(onboarding, /Copy Code/);
   assert.match(onboarding, /Download TXT/);
   assert.match(onboarding, /Print Code/);
-  assert.match(onboarding, /onboarding_completed_at/);
+  assert.match(migration, /onboarding_completed_at timestamptz/);
 });
 
 test("first-login Recovery Code is generated server-side with crypto randomness and only its hash is stored", () => {
