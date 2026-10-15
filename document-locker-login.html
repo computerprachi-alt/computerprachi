@@ -273,7 +273,7 @@ function initializeLocker() {
       });
       if (error) throw error;
       if (!data || !data.session) throw new Error('No authenticated session was created.');
-      window.location.replace('document-locker-dashboard.html');
+      window.location.replace('document-locker-recovery-onboarding.html');
     } catch (error) {
       showLoginMessage(error.message || 'Login failed. Please check your credentials and email verification status.');
     } finally {
