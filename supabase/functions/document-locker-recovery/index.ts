@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     return json({ message: "Password updated. Sign in with your account email, then change your email in account settings and complete Supabase's email verification before using the new address." });
   }
 
-  if (action === "admin_list" || action === "admin_decide") {
+  if (action === "admin_list" || action === "admin_decide" || action === "admin_reconcile_list" || action === "admin_reconcile_ticket") {
     const user = await requireAdminMfa(req);
     if (!user) return json({ error: "Not authorized. A verified allowlisted administrator with an AAL2 session is required." }, 403);
     if (action === "admin_list") {
@@ -149,6 +149,50 @@ Deno.serve(async (req) => {
         return json({ error: "Audit service unavailable. No recovery data was returned; try again later." }, 503);
       }
       return json({ requests: data || [] });
+    }
+    if (action === "admin_reconcile_list") {
+      const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data, error } = await service.from("document_recovery_tickets")
+        .select("ticket_hash,user_id,recovery_request_id,processing_at,created_at,expires_at")
+        .not("processing_at","is",null).is("used_at",null).lt("processing_at",cutoff)
+        .order("processing_at",{ascending:true}).limit(100);
+      if (error) return json({ error: "Unable to load interrupted recovery operations." },500);
+      if (!(await audit("admin_recovery_reconciliation_list_viewed",null,null,user.id,{ count:data?.length || 0 }))) {
+        return json({ error: "Audit service unavailable. No reconciliation data was returned." },503);
+      }
+      return json({ interrupted: data || [] });
+    }
+    if (action === "admin_reconcile_ticket") {
+      const ticketHash = clean(body.ticketHash,64).toLowerCase();
+      const outcome = clean(body.outcome,40);
+      const rationale = clean(body.rationale,500);
+      if (!/^[a-f0-9]{64}$/.test(ticketHash) || !["password_changed_confirmed","password_not_changed_confirmed","outcome_unknown"].includes(outcome) || rationale.length < 10) {
+        return json({ error: "A valid ticket hash, reconciliation outcome and rationale of at least 10 characters are required." },400);
+      }
+      if (!(await audit("admin_recovery_reconciliation_attempt",null,null,user.id,{ outcome }))) {
+        return json({ error: "Audit service unavailable. No reconciliation was recorded." },503);
+      }
+      const { data: ticket, error: ticketError } = await service.from("document_recovery_tickets")
+        .select("ticket_hash,user_id,recovery_request_id,processing_at,used_at")
+        .eq("ticket_hash",ticketHash).maybeSingle();
+      if (ticketError || !ticket || !ticket.processing_at || ticket.used_at) {
+        return json({ error: "Ticket is not in a reconcilable interrupted state." },409);
+      }
+      const { error: recordError } = await service.from("document_recovery_reconciliation").insert({
+        ticket_hash:ticketHash,actor_user_id:user.id,outcome,rationale
+      });
+      if (recordError) return json({ error: recordError.code === "23505" ? "This ticket has already been reconciled." : "Reconciliation could not be recorded." },409);
+      // Never clear processing_at or reopen this ticket, even when an administrator believes
+      // the password was not changed. A fresh, independently verified recovery must be started.
+      const { error: auditError } = await service.from("document_recovery_audit").insert({
+        event_type:"admin_recovery_reconciled",user_id:ticket.user_id,request_id:ticket.recovery_request_id,
+        actor_user_id:user.id,metadata:{ outcome, ticket_hash_prefix:ticketHash.slice(0,12) }
+      });
+      if (auditError) {
+        console.error("reconciliation outcome audit failed",{code:auditError.code});
+        return json({ error:"Reconciliation record exists but audit finalization failed. Ticket remains locked; administrator follow-up is required." },503);
+      }
+      return json({ message:"Reconciliation recorded. This ticket remains permanently locked; start a fresh verified recovery if another attempt is required." });
     }
     const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500), verifiedUserId = clean(body.verifiedUserId, 50);
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
