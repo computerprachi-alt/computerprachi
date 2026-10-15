@@ -323,3 +323,76 @@ end;
 $$;
 revoke all on function public.document_recovery_admin_decide(uuid,text,uuid,uuid,text,text,timestamptz) from public, anon, authenticated;
 grant execute on function public.document_recovery_admin_decide(uuid,text,uuid,uuid,text,text,timestamptz) to service_role;
+
+
+-- First-authenticated-use Recovery Code onboarding. Existing code holders are marked complete
+-- to avoid forcing them to replace a code they may already have saved.
+alter table public.document_recovery_codes
+  add column if not exists onboarding_completed_at timestamptz;
+update public.document_recovery_codes
+  set onboarding_completed_at = coalesce(onboarding_completed_at, updated_at, created_at, now())
+  where onboarding_completed_at is null;
+
+-- A newly confirmed/authenticated account gets a code only after the Edge Function
+-- authenticates that exact user. A row lock/UPSERT condition makes concurrent onboarding
+-- calls return a code to at most the request that inserted/replaced the code.
+create or replace function public.document_recovery_begin_onboarding(
+  p_user_id uuid,
+  p_code_hash text,
+  p_expires_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare affected uuid;
+begin
+  if p_user_id is null or p_code_hash is null or length(p_code_hash) <> 64
+     or p_expires_at is null or p_expires_at <= now()
+     or p_expires_at > now() + interval '366 days' then
+    raise exception 'invalid onboarding recovery code' using errcode = '22023';
+  end if;
+
+  insert into public.document_recovery_codes
+    (user_id, code_hash, used_at, created_at, updated_at, expires_at, onboarding_completed_at)
+  values
+    (p_user_id, p_code_hash, null, now(), now(), p_expires_at, null)
+  on conflict (user_id) do update
+    set code_hash = excluded.code_hash,
+        used_at = null,
+        created_at = now(),
+        updated_at = now(),
+        expires_at = excluded.expires_at,
+        onboarding_completed_at = null
+    where public.document_recovery_codes.used_at is not null
+       or public.document_recovery_codes.expires_at <= now()
+       or public.document_recovery_codes.onboarding_completed_at is null
+  returning user_id into affected;
+
+  return affected is not null;
+end;
+$$;
+revoke all on function public.document_recovery_begin_onboarding(uuid,text,timestamptz) from public, anon, authenticated;
+grant execute on function public.document_recovery_begin_onboarding(uuid,text,timestamptz) to service_role;
+
+create or replace function public.document_recovery_complete_onboarding(p_user_id uuid, p_code_hash text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_user_id is null or p_code_hash is null or length(p_code_hash) <> 64 then
+    return false;
+  end if;
+  update public.document_recovery_codes
+     set onboarding_completed_at = now(), updated_at = now()
+   where user_id = p_user_id and code_hash = p_code_hash
+     and used_at is null and expires_at > now()
+     and onboarding_completed_at is null;
+  return found;
+end;
+$$;
+revoke all on function public.document_recovery_complete_onboarding(uuid,text) from public, anon, authenticated;
+grant execute on function public.document_recovery_complete_onboarding(uuid,text) to service_role;
