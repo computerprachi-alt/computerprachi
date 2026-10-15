@@ -69,6 +69,8 @@ test("cleanup schedule and privileged SQL access controls are declared", () => {
   assert.match(migration, /revoke all on public\.document_recovery_audit from anon, authenticated/i);
   assert.match(migration, /purge_document_recovery_requests/);
   assert.match(migration, /document-recovery-daily-cleanup/);
+  assert.match(migration, /document_recovery_cleanup_runs/);
+  assert.match(migration, /status = 'failed', error_code = sqlstate/);
   assert.match(migration, /cron\.job_run_details/);
 });
 
