@@ -7,8 +7,10 @@ create table if not exists public.document_recovery_codes (
   code_hash text not null,
   created_at timestamptz not null default now(),
   used_at timestamptz,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '365 days')
 );
+alter table public.document_recovery_codes add column if not exists expires_at timestamptz not null default (now() + interval '365 days');
 alter table public.document_recovery_codes enable row level security;
 revoke all on public.document_recovery_codes from public, anon, authenticated;
 
@@ -105,6 +107,7 @@ begin
        or expires_at < now() - interval '30 days';
   get diagnostics removed = row_count;
   delete from public.document_recovery_attempts where attempted_at < now() - interval '24 hours';
+  delete from public.document_recovery_codes where expires_at < now() or used_at is not null;
   delete from public.document_recovery_tickets where expires_at < now() or used_at is not null;
   return removed;
 end $$;
@@ -144,7 +147,7 @@ begin
 
   select user_id into target_user
     from public.document_recovery_codes
-    where code_hash = p_code_hash and used_at is null
+    where code_hash = p_code_hash and used_at is null and expires_at > now()
     for update;
 
   if target_user is null then
