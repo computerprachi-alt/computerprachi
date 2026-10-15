@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secure Recovery Setup | CP Locker</title>
+<style>
+:root{--navy:#07145c;--red:#c40000;--bg:#f5f7fb;--border:#d8dfeb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:#222}
+.wrap{max-width:680px;margin:30px auto;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+header{background:var(--navy);color:#fff;padding:22px;text-align:center}header b{font-size:22px}
+main{padding:26px;line-height:1.6}h1{font-size:23px;color:var(--navy);margin-top:0}
+.notice{background:#fff7e6;border:1px solid #e8c56b;padding:13px;border-radius:7px}
+#code{font:700 18px monospace;overflow-wrap:anywhere;background:#f4f7fb;border:1px dashed #98a8c7;border-radius:8px;padding:18px;text-align:center;user-select:all}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.btn{border:0;border-radius:6px;padding:11px 15px;background:var(--navy);color:white;font-weight:700;cursor:pointer}.btn.primary{background:var(--red)}.btn:disabled{opacity:.5}
+#status{padding:12px;background:#f4f7fb;border-radius:6px;white-space:pre-wrap}label{display:flex;gap:9px;align-items:flex-start;margin:16px 0}.links{text-align:center;margin:20px}
+@media(max-width:600px){.wrap{margin:0;border:0;border-radius:0;min-height:100vh}main{padding:18px}.actions .btn{flex:1}}
+@media print{body{background:#fff}.wrap{border:0;margin:0;box-shadow:none}header,.instructions,.actions,label,.links,#status{display:none!important}main{padding:0}#code{font-size:21px;border:0}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="wrap">
+<header><b>CP LOCKER</b><div>First-login Recovery Setup</div></header>
+<main>
+<h1>Save your Recovery Code</h1>
+<p class="instructions">Before opening your Document Locker, set up a recovery method. This code is generated with a cryptographically secure random generator. The server stores only its SHA-256 hash and the code expires after one year.</p>
+<div class="notice instructions"><strong>Important:</strong> The plaintext code is shown only on this page once. Save it in a password manager or another private place. Anyone who obtains it may attempt account recovery. Do not share it.</div>
+<section id="codePanel" hidden>
+<p><strong>Your one-time display:</strong></p>
+<div id="code" aria-label="Recovery Code"></div>
+<div class="actions">
+<button class="btn" id="copyBtn" type="button">Copy Code</button>
+<button class="btn" id="downloadBtn" type="button">Download TXT</button>
+<button class="btn" id="printBtn" type="button">Print Code</button>
+</div>
+<label><input id="saved" type="checkbox"> <span>I have saved this Recovery Code somewhere secure and understand it cannot be retrieved after I continue.</span></label>
+<button class="btn primary" id="continueBtn" type="button" disabled>Confirm and Open Locker</button>
+</section>
+<div id="status" role="status" aria-live="polite">Checking your secure session…</div>
+<div class="links"><a href="document-locker-login.html">Back to Login</a> · <a href="document-locker.html">Locker Home</a></div>
+</main>
+</div>
+<script>
+(function(){
+const URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
+const KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
+const client=window.supabase.createClient(URL,KEY);
+const status=document.getElementById('status'), panel=document.getElementById('codePanel'), codeBox=document.getElementById('code');
+let codeValue='';
+function say(text,error){status.hidden=false;status.textContent=text;status.style.color=error?'#a00000':'#222'}
+async function call(action,extra){
+ const {data,error}=await client.auth.getSession();
+ if(error||!data.session)throw new Error('Your session has expired. Sign in again after verifying your email.');
+ const response=await fetch(URL+'/functions/v1/document-locker-recovery',{method:'POST',headers:{'content-type':'application/json','apikey':KEY,'authorization':'Bearer '+data.session.access_token},body:JSON.stringify({action,...(extra||{})})});
+ const result=await response.json();
+ if(!response.ok)throw new Error(result.error||'Secure Recovery Code setup failed.');
+ return result;
+}
+async function start(){
+ try{
+  const {data,error}=await client.auth.getSession();
+  if(error||!data.session){location.replace('document-locker-login.html');return}
+  if(!data.session.user.email_confirmed_at){say('Verify your registered email before setting up account recovery.',true);return}
+  const result=await call('ensure_onboarding_code');
+  if(result.alreadyConfigured){location.replace('document-locker-dashboard.html');return}
+  if(!result.issued||!result.code)throw new Error('The code was not issued. Please retry.');
+  codeValue=result.code;codeBox.textContent=codeValue;panel.hidden=false;
+  say('Code created. Save it securely before continuing. Expiry: '+new Date(result.expiresAt).toLocaleDateString()+'.');
+ }catch(error){say(error.message||'Could not prepare Recovery Code setup. Reload to retry.',true)}
+}
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+ try{await navigator.clipboard.writeText(codeValue);say('Recovery Code copied. Store it securely.')}catch{say('Clipboard access was blocked. Select the code and copy it manually.',true)}
+});
+document.getElementById('downloadBtn').addEventListener('click',()=>{
+ const blob=new Blob(['Computer Prachi Document Locker Recovery Code\n\n'+codeValue+'\n\nKeep this file private. Anyone with this code may attempt account recovery.'],{type:'text/plain;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='computer-prachi-recovery-code.txt';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ say('Download started. Keep the file private.');
+});
+document.getElementById('printBtn').addEventListener('click',()=>window.print());
+document.getElementById('saved').addEventListener('change',e=>{document.getElementById('continueBtn').disabled=!e.target.checked});
+document.getElementById('continueBtn').addEventListener('click',async()=>{
+ const button=document.getElementById('continueBtn');button.disabled=true;say('Saving confirmation…');
+ try{const result=await call('complete_code_onboarding',{code:codeValue});if(!result.completed)throw new Error('Confirmation was not recorded.');
+ codeValue='';codeBox.textContent='';location.replace('document-locker-dashboard.html');
+ }catch(error){say(error.message||'Could not confirm setup. Your code has not been confirmed.',true);button.disabled=false}
+});
+start();
+})();
+</script>
+</body></html>
