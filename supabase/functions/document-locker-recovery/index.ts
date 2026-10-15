@@ -66,18 +66,20 @@ Deno.serve(async (req) => {
       return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
     }
     const hash = await sha(code);
-    const { data: row } = await service.from("document_recovery_codes").select("user_id,used_at").eq("code_hash", hash).maybeSingle();
-    if (!row || row.used_at) return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
     const ticket = randomToken(32), ticket_hash = await sha(ticket);
-    const { error } = await service.from("document_recovery_tickets").insert({ ticket_hash, user_id: row.user_id, expires_at: new Date(Date.now()+10*60*1000).toISOString() });
-    if (error) return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
-    // Atomically consume the code only after a ticket is created.
-    const { data: consumed, error: consumeError } = await service.from("document_recovery_codes").update({ used_at: new Date().toISOString() }).eq("user_id", row.user_id).eq("code_hash", hash).is("used_at", null).select("user_id");
-    if (consumeError || !consumed?.length) {
-      await service.from("document_recovery_tickets").delete().eq("ticket_hash", ticket_hash);
+    // The database RPC locks and consumes the code and inserts the ticket in one transaction.
+    // If the request races or the server crashes, no second ticket can be issued from this code.
+    const { data: consumedUserId, error: consumeError } = await service.rpc("document_recovery_consume_code", {
+      p_code_hash: hash,
+      p_ticket_hash: ticket_hash,
+      p_expires_at: new Date(Date.now()+10*60*1000).toISOString()
+    });
+    const userId = typeof consumedUserId === "string" ? consumedUserId : null;
+    if (consumeError || !userId) {
+      if (consumeError) console.error("atomic recovery-code consumption failed", { code: consumeError.code });
       return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
     }
-    await audit("recovery_code_verified", row.user_id);
+    await audit("recovery_code_verified", userId);
     return json({ ticket, message: "Code verified. Set a new password now. You can update and verify your email after signing in." });
   }
 
@@ -110,9 +112,12 @@ Deno.serve(async (req) => {
     if (!claimed?.length) return json({ error: "Recovery session expired, invalid, or already in use. If a server interruption occurred, contact support rather than retrying this ticket." }, 400);
     const { error } = await service.auth.admin.updateUserById(t.user_id, { password });
     if (error) {
-      await service.from("document_recovery_tickets").update({ processing_at: null }).eq("ticket_hash",hash).is("used_at",null);
-      await audit("recovery_password_update_failed",t.user_id,t.recovery_request_id);
-      return json({ error: "Password could not be updated. You may retry this recovery session shortly." }, 400);
+      // Auth/network errors can be ambiguous: the Auth service may have applied the password
+      // update before the response was lost. Never release the ticket for replay on an
+      // ambiguous result. Keep processing_at set and require administrator reconciliation
+      // and a newly verified recovery ticket if necessary.
+      await audit("recovery_password_update_outcome_uncertain",t.user_id,t.recovery_request_id,null,{ auth_error_code: error.status || "unknown" });
+      return json({ error: "The password update result could not be confirmed. For your security this ticket is locked against replay; contact support for a fresh verified recovery." }, 503);
     }
     const { error: finalizeError } = await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString(), processing_at: null }).eq("ticket_hash",hash).is("used_at",null).not("processing_at","is",null);
     if (finalizeError) {
