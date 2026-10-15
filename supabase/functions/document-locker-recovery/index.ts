@@ -50,12 +50,64 @@ Deno.serve(async (req) => {
   const ip = clean(req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "unknown", 100).split(",")[0];
   if (!(await rate("ip:" + ip))) return json({ error: "Too many attempts. Try again later." }, 429);
 
+  if (action === "onboarding_status") {
+    const user = await userFromRequest(req);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    const { data, error } = await service.from("document_recovery_codes")
+      .select("onboarding_completed_at,used_at,expires_at")
+      .eq("user_id", user.id).maybeSingle();
+    if (error) return json({ error: "Could not verify recovery onboarding status." }, 503);
+    const active = !!data && !data.used_at && new Date(data.expires_at).getTime() > Date.now();
+    return json({ needsSetup: !active || !data.onboarding_completed_at });
+  }
+
+  if (action === "ensure_onboarding_code") {
+    const user = await userFromRequest(req);
+    if (!user || !user.email_confirmed_at) return json({ error: "Verify your email and sign in before setting up account recovery." }, 401);
+    const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
+    const code_hash = await sha(code);
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: issued, error } = await service.rpc("document_recovery_begin_onboarding", {
+      p_user_id: user.id, p_code_hash: code_hash, p_expires_at: expiresAt
+    });
+    if (error) {
+      console.error("recovery onboarding issuance failed", { code: error.code });
+      return json({ error: "Recovery Code setup is temporarily unavailable. Please retry." }, 503);
+    }
+    if (!issued) return json({ alreadyConfigured: true });
+    if (!(await audit("recovery_code_onboarding_issued", user.id, null, user.id))) {
+      await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
+      return json({ error: "Audit service unavailable. No Recovery Code was issued; please retry." }, 503);
+    }
+    return json({ issued: true, code, expiresAt, message: "Save this code now. It will not be shown again after you confirm setup." });
+  }
+
+  if (action === "complete_code_onboarding") {
+    const user = await userFromRequest(req);
+    if (!user || !user.email_confirmed_at) return json({ error: "Authentication required" }, 401);
+    const code = clean(body.code, 120).toUpperCase();
+    if (!/^CPR-(?:[A-F0-9]{5}-){7}[A-F0-9]{5}$/.test(code)) return json({ error: "The Recovery Code confirmation is invalid." }, 400);
+    const codeHash = await sha(code);
+    if (!(await audit("recovery_code_onboarding_completed_attempt", user.id, null, user.id))) {
+      return json({ error: "Audit service unavailable. Setup has not been completed." }, 503);
+    }
+    const { data: completed, error } = await service.rpc("document_recovery_complete_onboarding", {
+      p_user_id: user.id, p_code_hash: codeHash
+    });
+    if (error || !completed) return json({ error: "Could not confirm this Recovery Code. Generate a fresh code and try again." }, 409);
+    if (!(await audit("recovery_code_onboarding_completed", user.id, null, user.id))) {
+      // The user may retry confirmation; the state remains completed but the initial attempt is durable.
+      return json({ error: "Setup was saved, but the final audit confirmation failed. Contact support before proceeding." }, 503);
+    }
+    return json({ completed: true });
+  }
+
   if (action === "issue_code") {
     const user = await userFromRequest(req);
     if (!user) return json({ error: "Authentication required" }, 401);
     const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
     const code_hash = await sha(code);
-    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() });
+    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), onboarding_completed_at: new Date().toISOString() });
     if (error) return json({ error: "Could not create a recovery code. Try again later." }, 500);
     if (!(await audit("recovery_code_issued", user.id, null, user.id))) {
       await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
