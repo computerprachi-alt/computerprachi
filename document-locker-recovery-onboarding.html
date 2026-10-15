@@ -43,16 +43,16 @@ main{padding:26px;line-height:1.6}h1{font-size:23px;color:var(--navy);margin-top
 </div>
 <script>
 (function(){
-const URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
+const SUPABASE_URL='https://nnwbezwnwxybwwnhaetw.supabase.co';
 const KEY='sb_publishable_4Bc8uilYx3TZZ91EBy0z-g_ZxFQ2e2Q';
-const client=window.supabase.createClient(URL,KEY);
+const client=window.supabase.createClient(SUPABASE_URL,KEY);
 const status=document.getElementById('status'), panel=document.getElementById('codePanel'), codeBox=document.getElementById('code');
 let codeValue='';
 function say(text,error){status.hidden=false;status.textContent=text;status.style.color=error?'#a00000':'#222'}
 async function call(action,extra){
  const {data,error}=await client.auth.getSession();
  if(error||!data.session)throw new Error('Your session has expired. Sign in again after verifying your email.');
- const response=await fetch(URL+'/functions/v1/document-locker-recovery',{method:'POST',headers:{'content-type':'application/json','apikey':KEY,'authorization':'Bearer '+data.session.access_token},body:JSON.stringify({action,...(extra||{})})});
+ const response=await fetch(SUPABASE_URL+'/functions/v1/document-locker-recovery',{method:'POST',headers:{'content-type':'application/json','apikey':KEY,'authorization':'Bearer '+data.session.access_token},body:JSON.stringify({action,...(extra||{})})});
  const result=await response.json();
  if(!response.ok)throw new Error(result.error||'Secure Recovery Code setup failed.');
  return result;
