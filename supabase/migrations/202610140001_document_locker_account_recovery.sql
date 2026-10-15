@@ -233,3 +233,89 @@ end;
 $$;
 revoke all on function public.purge_document_recovery_requests() from public, anon, authenticated;
 grant execute on function public.purge_document_recovery_requests() to service_role;
+
+
+-- Atomically decide an admin recovery request, create (or withhold) its ticket,
+-- and write the durable decision audit event in the same transaction.
+-- The Edge Function must authenticate the allowlisted AAL2 administrator before calling this RPC.
+create or replace function public.document_recovery_admin_decide(
+  p_request_id uuid,
+  p_decision text,
+  p_verified_user_id uuid,
+  p_actor_user_id uuid,
+  p_review_notes text,
+  p_ticket_hash text,
+  p_ticket_expires_at timestamptz
+)
+returns table(request_id uuid, account_user_id uuid, new_email text, decision text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target public.document_recovery_requests%rowtype;
+  effective_user uuid;
+begin
+  if p_request_id is null
+     or p_decision not in ('approved','rejected')
+     or p_actor_user_id is null
+     or p_review_notes is null
+     or length(trim(p_review_notes)) < 10 then
+    raise exception 'invalid recovery decision' using errcode = '22023';
+  end if;
+
+  if p_decision = 'approved' then
+    if p_verified_user_id is null
+       or p_ticket_hash is null or length(p_ticket_hash) <> 64
+       or p_ticket_expires_at is null
+       or p_ticket_expires_at <= now()
+       or p_ticket_expires_at > now() + interval '24 hours' then
+      raise exception 'invalid approval ticket' using errcode = '22023';
+    end if;
+  elsif p_verified_user_id is not null or p_ticket_hash is not null or p_ticket_expires_at is not null then
+    raise exception 'rejection must not create a recovery ticket' using errcode = '22023';
+  end if;
+
+  select * into target
+    from public.document_recovery_requests
+    where id = p_request_id
+    for update;
+
+  if not found or target.status <> 'pending' or target.expires_at <= now() then
+    raise exception 'request is not pending or has expired' using errcode = '40001';
+  end if;
+
+  effective_user := case when p_decision = 'approved' then p_verified_user_id else null end;
+
+  if p_decision = 'approved' then
+    insert into public.document_recovery_tickets(ticket_hash,user_id,recovery_request_id,expires_at)
+      values (p_ticket_hash,effective_user,p_request_id,p_ticket_expires_at);
+  end if;
+
+  update public.document_recovery_requests
+    set status = p_decision,
+        account_user_id = effective_user,
+        reviewer_user_id = p_actor_user_id,
+        reviewed_at = now(),
+        review_notes = p_review_notes
+    where id = p_request_id and status = 'pending';
+
+  if not found then
+    raise exception 'request decision lost a race' using errcode = '40001';
+  end if;
+
+  insert into public.document_recovery_audit(event_type,user_id,request_id,actor_user_id,metadata)
+    values ('admin_recovery_request_' || p_decision,effective_user,p_request_id,p_actor_user_id,
+      jsonb_build_object('decision',p_decision));
+
+  if p_decision = 'approved' then
+    insert into public.document_recovery_audit(event_type,user_id,request_id,actor_user_id,metadata)
+      values ('admin_recovery_ticket_created',effective_user,p_request_id,p_actor_user_id,
+        jsonb_build_object('ticket_hash_prefix',left(p_ticket_hash,12)));
+  end if;
+
+  return query select target.id,effective_user,target.new_email,p_decision;
+end;
+$$;
+revoke all on function public.document_recovery_admin_decide(uuid,text,uuid,uuid,text,text,timestamptz) from public, anon, authenticated;
+grant execute on function public.document_recovery_admin_decide(uuid,text,uuid,uuid,text,text,timestamptz) to service_role;
