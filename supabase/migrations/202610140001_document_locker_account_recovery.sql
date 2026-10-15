@@ -167,3 +167,22 @@ end;
 $$;
 revoke all on function public.document_recovery_consume_code(text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.document_recovery_consume_code(text, text, timestamptz) to service_role;
+
+
+-- Append-only reconciliation evidence for interrupted/ambiguous password updates.
+-- A reconciliation never reopens a ticket; recovery must restart with fresh verification.
+create table if not exists public.document_recovery_reconciliation (
+  id bigint generated always as identity primary key,
+  ticket_hash text not null references public.document_recovery_tickets(ticket_hash) on delete cascade,
+  actor_user_id uuid not null references auth.users(id),
+  outcome text not null check (outcome in ('password_changed_confirmed','password_not_changed_confirmed','outcome_unknown')),
+  rationale text not null check (length(trim(rationale)) >= 10),
+  created_at timestamptz not null default now(),
+  unique (ticket_hash)
+);
+alter table public.document_recovery_reconciliation enable row level security;
+revoke all on public.document_recovery_reconciliation from public, anon, authenticated;
+
+-- One stored code hash must map to at most one account, protecting atomic redemption assumptions.
+create unique index if not exists document_recovery_codes_code_hash_uidx
+  on public.document_recovery_codes(code_hash);
