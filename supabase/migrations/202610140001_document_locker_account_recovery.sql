@@ -118,3 +118,52 @@ begin
     perform cron.schedule('document-recovery-daily-cleanup', '17 3 * * *', 'select public.purge_document_recovery_requests();');
   end if;
 end $$;
+
+
+-- Atomically consume a Recovery Code and issue its ticket in one transaction.
+-- This closes the crash/race window between inserting a ticket and marking the code used.
+create or replace function public.document_recovery_consume_code(
+  p_code_hash text,
+  p_ticket_hash text,
+  p_expires_at timestamptz
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_user uuid;
+begin
+  if p_code_hash is null or length(p_code_hash) <> 64
+     or p_ticket_hash is null or length(p_ticket_hash) <> 64
+     or p_expires_at is null or p_expires_at <= now()
+     or p_expires_at > now() + interval '15 minutes' then
+    return null;
+  end if;
+
+  select user_id into target_user
+    from public.document_recovery_codes
+    where code_hash = p_code_hash and used_at is null
+    for update;
+
+  if target_user is null then
+    return null;
+  end if;
+
+  update public.document_recovery_codes
+    set used_at = now(), updated_at = now()
+    where user_id = target_user and code_hash = p_code_hash and used_at is null;
+
+  if not found then
+    return null;
+  end if;
+
+  insert into public.document_recovery_tickets(ticket_hash, user_id, expires_at)
+    values (p_ticket_hash, target_user, p_expires_at);
+
+  return target_user;
+end;
+$$;
+revoke all on function public.document_recovery_consume_code(text, text, timestamptz) from public, anon, authenticated;
+grant execute on function public.document_recovery_consume_code(text, text, timestamptz) to service_role;
