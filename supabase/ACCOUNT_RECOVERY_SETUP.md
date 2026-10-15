@@ -75,3 +75,14 @@ Identity-bearing requests expire after 30 days and are removed by `purge_documen
 - The staging workflow is manually triggered only; pull-request runs never receive staging secrets and never run live integration tests. Do not use `pull_request_target` to execute untrusted PR code.
 - The Environment, required reviewers, branch restrictions, variables and secrets are manual GitHub Settings tasks. This change does not configure them via API and does not claim they are already enabled.
 - Staging integration tests must not be reported as passed unless the manually approved workflow actually runs with the protected Environment and its test results show the tests executed (not ignored/skipped). This workflow does not apply migrations or deploy the Edge Function; those are separate, explicit staging-only setup steps.
+
+
+## Atomic admin decision hardening (current branch update)
+- Admin approve/reject now calls the service-role-only `document_recovery_admin_decide` PostgreSQL RPC. It locks the pending request row, validates the requested state, creates an approval ticket (approval only), updates the request and writes the decision/ticket audit rows in one database transaction. If any database/audit insert fails, the transaction rolls back. The separate decision-attempt audit is written before calling the RPC.
+- The Edge Function still performs confirmed-email allowlist and current AAL2 checks before the RPC. The RPC is not callable by `anon` or `authenticated`; only `service_role` may execute it.
+- Source-level regression assertions were added for the atomic transaction and the email UI not marking a proposed address as confirmed. These assertions do not prove PostgreSQL behavior until the migration is applied and tests run in disposable staging.
+
+## Remaining release blockers — do not deploy or mark Ready
+- Registration-time Recovery Code generation/display is **not implemented**. Current code issuance is authenticated, on-demand from Recovery Settings. Do not claim every new registrant receives a code automatically.
+- Lost-old-email recovery is **not complete**. The recovery request stores a proposed new email and the approved ticket currently changes the password only. The user must then sign in and use Supabase's regular email-change flow; depending on the project's Secure Email Change settings, that may require confirmation at the old address. Do not bypass Supabase confirmation or mark the new address confirmed manually. A supported, verified new-email ownership flow for this exact case remains required.
+- Real staging integration validation (concurrency, expiry, AAL2 admin, password-update ambiguity/failure, email confirmation and cleanup cron execution/alerts) remains pending until a dedicated disposable staging project and protected GitHub Environment are configured and an approved run actually executes. Skipped tests are not passes.
