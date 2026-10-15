@@ -6,6 +6,8 @@ const login = await readFile(new URL("../document-locker-login.html", import.met
 const dashboard = await readFile(new URL("../document-locker-dashboard.html", import.meta.url), "utf8");
 const recovery = await readFile(new URL("../document-locker-recovery.html", import.meta.url), "utf8");
 const settings = await readFile(new URL("../document-locker-recovery-settings.html", import.meta.url), "utf8");
+const register = await readFile(new URL("../document-locker-register.html", import.meta.url), "utf8");
+const onboarding = await readFile(new URL("../document-locker-recovery-onboarding.html", import.meta.url), "utf8");
 const edge = await readFile(new URL("../supabase/functions/document-locker-recovery/index.ts", import.meta.url), "utf8");
 const migration = await readFile(new URL("../supabase/migrations/202610140001_document_locker_account_recovery.sql", import.meta.url), "utf8");
 
@@ -109,4 +111,33 @@ test("recovery codes have a defined expiry and expired/consumed codes are purged
   assert.match(edge, /expires_at: new Date\(Date\.now\(\) \+ 365 \* 24 \* 60 \* 60 \* 1000\)\.toISOString\(\)/);
   assert.match(migration, /where code_hash = p_code_hash and used_at is null and expires_at > now\(\)/i);
   assert.match(migration, /delete from public\.document_recovery_codes where expires_at < now\(\) or used_at is not null/i);
+});
+
+
+test("new registration, email-confirmation redirect, login, and dashboard enforce Recovery Code onboarding", () => {
+  assert.match(register, /document-locker-recovery-onboarding\.html/);
+  assert.match(login, /document-locker-recovery-onboarding\.html/);
+  assert.match(dashboard, /action:'onboarding_status'/);
+  assert.match(dashboard, /state\.needsSetup/);
+  assert.match(onboarding, /ensure_onboarding_code/);
+  assert.match(onboarding, /complete_code_onboarding/);
+  assert.match(onboarding, /Copy Code/);
+  assert.match(onboarding, /Download TXT/);
+  assert.match(onboarding, /Print Code/);
+  assert.match(onboarding, /onboarding_completed_at/);
+});
+
+test("first-login Recovery Code is generated server-side with crypto randomness and only its hash is stored", () => {
+  assert.match(edge, /crypto\.getRandomValues\(new Uint8Array\(n\)\)/);
+  assert.match(edge, /document_recovery_begin_onboarding/);
+  assert.match(edge, /p_code_hash: code_hash/);
+  assert.match(migration, /create or replace function public\.document_recovery_begin_onboarding/);
+  assert.match(migration, /on conflict \(user_id\) do update/);
+  assert.match(migration, /grant execute on function public\.document_recovery_begin_onboarding\(uuid,text,timestamptz\) to service_role/);
+  assert.doesNotMatch(migration, /recovery_code_plaintext|plaintext_code/);
+});
+
+test("dashboard remains locked when onboarding status cannot be verified", () => {
+  assert.match(dashboard, /Could not verify Recovery Code setup/);
+  assert.match(dashboard, /locker remains locked for safety/);
 });
