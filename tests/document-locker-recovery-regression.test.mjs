@@ -102,3 +102,11 @@ test("email-change flow does not manually mark a proposed email as confirmed", (
   assert.doesNotMatch(settings, /email_confirm:\s*true|email_confirmed_at\s*=/);
   assert.match(settings, /verification/i);
 });
+
+
+test("recovery codes have a defined expiry and expired/consumed codes are purged", () => {
+  assert.match(migration, /expires_at timestamptz not null default \(now\(\) \+ interval '365 days'\)/i);
+  assert.match(edge, /expires_at: new Date\(Date\.now\(\) \+ 365 \* 24 \* 60 \* 60 \* 1000\)\.toISOString\(\)/);
+  assert.match(migration, /where code_hash = p_code_hash and used_at is null and expires_at > now\(\)/i);
+  assert.match(migration, /delete from public\.document_recovery_codes where expires_at < now\(\) or used_at is not null/i);
+});
