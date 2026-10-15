@@ -8,6 +8,7 @@ import { assert, assertEquals, assertExists, assertNotEquals } from "jsr:@std/as
 const base = Deno.env.get("RECOVERY_TEST_BASE_URL")?.replace(/\/$/, "");
 const anon = Deno.env.get("RECOVERY_TEST_ANON_KEY");
 const userToken = Deno.env.get("RECOVERY_TEST_USER_ACCESS_TOKEN");
+const adminToken = Deno.env.get("RECOVERY_TEST_ADMIN_ACCESS_TOKEN");
 const enabled = Boolean(Deno.env.get("RECOVERY_TEST_ALLOW_STAGING") === "YES" && base && anon && userToken && !/nnwbezwnwxybwwnhaetw\.supabase\.co|computerprachi\.online/i.test(base));
 const newPassword = Deno.env.get("RECOVERY_TEST_NEW_PASSWORD");
 
@@ -74,4 +75,11 @@ Deno.test({ name: "rate limiter eventually returns 429 for repeated requests", i
     if (response.status === 429) { sawLimit = true; break; }
   }
   assertEquals(sawLimit, true, "expected server-side per-IP rate limit to reject repeated requests");
+}});
+
+
+Deno.test({ name: "allowlisted staging administrator with an AAL2 session can access the review queue", ignore: !(enabled && adminToken), fn: async () => {
+  const { response, body } = await invoke("admin_list", {}, adminToken!);
+  assertEquals(response.status, 200, "the staging admin token must belong to an allowlisted, email-confirmed AAL2 administrator");
+  assertExists(body.requests);
 }});
