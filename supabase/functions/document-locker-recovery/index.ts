@@ -34,9 +34,10 @@ async function rate(key: string) {
   const { data, error } = await service.rpc("document_recovery_record_attempt", { p_attempt_key: await sha(key), p_success: false });
   return !error && !!data?.[0]?.allowed;
 }
-async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}) {
+async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}): Promise<boolean> {
   const { error } = await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });
   if (error) console.error("recovery audit write failed", { event_type, code: error.code });
+  return !error;
 }
 function validEmail(v: string) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
@@ -56,7 +57,10 @@ Deno.serve(async (req) => {
     const code_hash = await sha(code);
     const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     if (error) return json({ error: "Could not create a recovery code. Try again later." }, 500);
-    await audit("recovery_code_issued", user.id, null, user.id);
+    if (!(await audit("recovery_code_issued", user.id, null, user.id))) {
+      await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
+      return json({ error: "Audit service unavailable. No recovery code was issued; try again later." }, 503);
+    }
     return json({ code, message: "Save this code securely. It is shown only once; regenerating invalidates the previous code." });
   }
 
@@ -79,7 +83,11 @@ Deno.serve(async (req) => {
       if (consumeError) console.error("atomic recovery-code consumption failed", { code: consumeError.code });
       return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
     }
-    await audit("recovery_code_verified", userId);
+    if (!(await audit("recovery_code_verified", userId))) {
+      // The code and ticket are already atomically consumed/created. Never return an unaudited ticket.
+      await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash", ticket_hash).is("used_at", null);
+      return json({ error: "Audit service unavailable. Start a new recovery attempt later." }, 503);
+    }
     return json({ ticket, message: "Code verified. Set a new password now. You can update and verify your email after signing in." });
   }
 
@@ -137,10 +145,17 @@ Deno.serve(async (req) => {
     if (action === "admin_list") {
       const { data, error } = await service.from("document_recovery_requests").select("id,registered_full_name,date_of_birth,mother_name,father_name,new_email,status,created_at,expires_at").eq("status","pending").order("created_at",{ascending:true}).limit(100);
       if (error) return json({ error: "Unable to load requests" }, 500);
+      if (!(await audit("admin_recovery_list_viewed", null, null, user.id, { count: data?.length || 0 }))) {
+        return json({ error: "Audit service unavailable. No recovery data was returned; try again later." }, 503);
+      }
       return json({ requests: data || [] });
     }
     const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500), verifiedUserId = clean(body.verifiedUserId, 50);
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
+    // Log the privileged decision attempt before any ticket or request mutation.
+    if (!(await audit("admin_recovery_decision_attempt", null, id, user.id, { decision }))) {
+      return json({ error: "Audit service unavailable. No decision was applied; try again later." }, 503);
+    }
     const { data: request } = await service.from("document_recovery_requests").select("id,account_user_id,status,expires_at").eq("id",id).maybeSingle();
     if (!request || request.status !== "pending" || new Date(request.expires_at).getTime() < Date.now() || (decision === "approved" && !/^[0-9a-f-]{36}$/i.test(verifiedUserId))) return json({ error: "Request cannot be reviewed or lacks an administrator-verified account match." },400);
     if (decision === "approved") {
@@ -160,11 +175,16 @@ Deno.serve(async (req) => {
       if (ticketHash) await service.from("document_recovery_tickets").delete().eq("ticket_hash",ticketHash).is("used_at",null);
       return json({ error: "Request was already reviewed." },409);
     }
-    if (decision === "approved") {
-      await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id);
-      // The raw ticket is returned only once to an allowlisted AAL2 administrator.
+    if (!(await audit("admin_recovery_request_"+decision,changed.account_user_id,id,user.id))) {
+      // The decision attempt is already durably audited. Do not disclose an approval ticket if
+      // the result event cannot be recorded; keep the ticket unusable by revoking it.
+      if (ticketHash) await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",ticketHash).is("used_at",null);
+      return json({ error: "Decision was recorded but audit finalization failed. Ticket withheld; administrator reconciliation is required." },503);
     }
-    await audit("admin_recovery_request_"+decision,changed.account_user_id,id,user.id);
+    if (decision === "approved" && !(await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id))) {
+      if (ticketHash) await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",ticketHash).is("used_at",null);
+      return json({ error: "Approval was recorded but ticket audit failed. Ticket withheld; administrator reconciliation is required." },503);
+    }
     return json(decision === "approved" ? { message: "Approved. Deliver the one-time ticket only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket } : { message: "Request rejected. The claimant receives no recovery ticket." });
   }
   return json({ error: "Unknown action" }, 400);
