@@ -175,8 +175,9 @@ Deno.serve(async (req) => {
       const { data: ticket, error: ticketError } = await service.from("document_recovery_tickets")
         .select("ticket_hash,user_id,recovery_request_id,processing_at,used_at")
         .eq("ticket_hash",ticketHash).maybeSingle();
-      if (ticketError || !ticket || !ticket.processing_at || ticket.used_at) {
-        return json({ error: "Ticket is not in a reconcilable interrupted state." },409);
+      if (ticketError || !ticket || !ticket.processing_at || ticket.used_at ||
+          new Date(ticket.processing_at).getTime() > Date.now() - 5 * 60 * 1000) {
+        return json({ error: "Ticket is not in a reconcilable interrupted state; only operations stuck for at least five minutes can be reviewed." },409);
       }
       const { error: recordError } = await service.from("document_recovery_reconciliation").insert({
         ticket_hash:ticketHash,actor_user_id:user.id,outcome,rationale
