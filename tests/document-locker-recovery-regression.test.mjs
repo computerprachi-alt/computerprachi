@@ -80,3 +80,25 @@ test("mobile OTP remains unavailable and email changes use Supabase verification
   assert.match(settings, /Mobile OTP is unavailable/i);
   assert.doesNotMatch(settings, /sendOtp|verifyOtp|phone:/i);
 });
+
+
+test("admin recovery decision is atomic: request lock, ticket, decision and outcome audit share one RPC transaction", () => {
+  assert.match(migration, /function public\.document_recovery_admin_decide\([\s\S]*?for update[\s\S]*?insert into public\.document_recovery_tickets[\s\S]*?update public\.document_recovery_requests[\s\S]*?insert into public\.document_recovery_audit/i);
+  assert.match(migration, /revoke all on function public\.document_recovery_admin_decide\(uuid,text,uuid,uuid,text,text,timestamptz\) from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public\.document_recovery_admin_decide\(uuid,text,uuid,uuid,text,text,timestamptz\) to service_role/i);
+  assert.match(edge, /service\.rpc\("document_recovery_admin_decide"/);
+  assert.doesNotMatch(edge, /from\("document_recovery_tickets"\)\.insert\(\{ ticket_hash:ticketHash, user_id:verifiedUserId/);
+});
+
+test("admin decision audit failure rolls back approval and ticket creation at database transaction boundary", () => {
+  const rpc = migration.slice(migration.indexOf("create or replace function public.document_recovery_admin_decide"));
+  assert.match(rpc, /insert into public\.document_recovery_audit/);
+  assert.match(rpc, /return query select target\.id,effective_user,target\.new_email,p_decision/);
+  assert.match(rpc, /for update/);
+});
+
+test("email-change flow does not manually mark a proposed email as confirmed", () => {
+  assert.match(settings, /auth\.updateUser\(\{\s*email:/);
+  assert.doesNotMatch(settings, /email_confirm:\s*true|email_confirmed_at\s*=/);
+  assert.match(settings, /verification/i);
+});
