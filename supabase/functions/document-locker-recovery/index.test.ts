@@ -60,3 +60,18 @@ Deno.test({ name: "malformed/expired/reused ticket cannot reset a password", ign
   const { response } = await invoke("complete_recovery", { ticket: "f".repeat(64), password: newPassword || "Staging-Only-Password-123!" });
   assertEquals(response.status, 400);
 }});
+
+
+Deno.test({ name: "ordinary authenticated user without admin AAL2 is denied admin access", ignore: !enabled, fn: async () => {
+  const { response } = await invoke("admin_list", {}, userToken!);
+  assertEquals(response.status, 403);
+}});
+
+Deno.test({ name: "rate limiter eventually returns 429 for repeated requests", ignore: !enabled, fn: async () => {
+  let sawLimit = false;
+  for (let i = 0; i < 12; i++) {
+    const { response } = await invoke("unknown-rate-limit-test-action");
+    if (response.status === 429) { sawLimit = true; break; }
+  }
+  assertEquals(sawLimit, true, "expected server-side per-IP rate limit to reject repeated requests");
+}});
