@@ -50,7 +50,7 @@ jobs:
           REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/compare/feature/document-locker-account-recovery...${REVIEWED_COMMIT}" --jq '.status' | grep -Eq 'identical|ahead|behind'
+          gh api "repos/${GITHUB_REPOSITORY}/compare/feature/document-locker-account-recovery...${REVIEWED_COMMIT}" --jq '.status' | grep -Eq 'identical|behind'
           gh api "repos/${GITHUB_REPOSITORY}/commits/${REVIEWED_COMMIT}" --jq '.sha' | grep -Fx "$REVIEWED_COMMIT"
 
       - name: Validate staging-only configuration
