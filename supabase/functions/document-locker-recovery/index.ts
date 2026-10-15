@@ -197,40 +197,40 @@ Deno.serve(async (req) => {
     }
     const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500), verifiedUserId = clean(body.verifiedUserId, 50);
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
-    // Log the privileged decision attempt before any ticket or request mutation.
+    // Durably audit the attempt first. The database RPC then locks the pending request,
+    // inserts the ticket, records the decision and writes outcome audit rows atomically.
     if (!(await audit("admin_recovery_decision_attempt", null, id, user.id, { decision }))) {
       return json({ error: "Audit service unavailable. No decision was applied; try again later." }, 503);
     }
-    const { data: request } = await service.from("document_recovery_requests").select("id,account_user_id,status,expires_at").eq("id",id).maybeSingle();
-    if (!request || request.status !== "pending" || new Date(request.expires_at).getTime() < Date.now() || (decision === "approved" && !/^[0-9a-f-]{36}$/i.test(verifiedUserId))) return json({ error: "Request cannot be reviewed or lacks an administrator-verified account match." },400);
-    if (decision === "approved") {
-      const { data: authTarget, error: targetError } = await service.auth.admin.getUserById(verifiedUserId);
-      if (targetError || !authTarget?.user) return json({ error: "The verified account could not be found." },400);
-    }
     let approvedTicket: string | null = null;
     let ticketHash: string | null = null;
+    let ticketExpiresAt: string | null = null;
     if (decision === "approved") {
+      if (!/^[0-9a-f-]{36}$/i.test(verifiedUserId)) return json({ error: "An independently verified account is required." },400);
+      const { data: authTarget, error: targetError } = await service.auth.admin.getUserById(verifiedUserId);
+      if (targetError || !authTarget?.user) return json({ error: "The verified account could not be found." },400);
       approvedTicket = randomToken(32);
       ticketHash = await sha(approvedTicket);
-      const { error: ticketError } = await service.from("document_recovery_tickets").insert({ ticket_hash:ticketHash, user_id:verifiedUserId, recovery_request_id:id, expires_at:new Date(Date.now()+24*60*60*1000).toISOString() });
-      if (ticketError) return json({ error: "Request could not be approved. Contact the system administrator." },500);
+      ticketExpiresAt = new Date(Date.now()+24*60*60*1000).toISOString();
     }
-    const { data: changed } = await service.from("document_recovery_requests").update({ status:decision, account_user_id:decision === "approved" ? verifiedUserId : null, reviewer_user_id:user.id, reviewed_at:new Date().toISOString(), review_notes:notes }).eq("id",id).eq("status","pending").select("id,account_user_id,new_email").maybeSingle();
-    if (!changed) {
-      if (ticketHash) await service.from("document_recovery_tickets").delete().eq("ticket_hash",ticketHash).is("used_at",null);
-      return json({ error: "Request was already reviewed." },409);
+    const { data: decisionRows, error: decisionError } = await service.rpc("document_recovery_admin_decide", {
+      p_request_id: id,
+      p_decision: decision,
+      p_verified_user_id: decision === "approved" ? verifiedUserId : null,
+      p_actor_user_id: user.id,
+      p_review_notes: notes,
+      p_ticket_hash: ticketHash,
+      p_ticket_expires_at: ticketExpiresAt
+    });
+    if (decisionError || !decisionRows?.length) {
+      console.error("atomic admin recovery decision failed", { code: decisionError?.code || "no_result" });
+      return json({ error: decisionError?.code === "40001" ? "Request was already reviewed or expired." : "Decision was not applied. Check the request state and audit service before retrying." }, decisionError?.code === "40001" ? 409 : 503);
     }
-    if (!(await audit("admin_recovery_request_"+decision,changed.account_user_id,id,user.id))) {
-      // The decision attempt is already durably audited. Do not disclose an approval ticket if
-      // the result event cannot be recorded; keep the ticket unusable by revoking it.
-      if (ticketHash) await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",ticketHash).is("used_at",null);
-      return json({ error: "Decision was recorded but audit finalization failed. Ticket withheld; administrator reconciliation is required." },503);
-    }
-    if (decision === "approved" && !(await audit("admin_recovery_ticket_created",changed.account_user_id,id,user.id))) {
-      if (ticketHash) await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash",ticketHash).is("used_at",null);
-      return json({ error: "Approval was recorded but ticket audit failed. Ticket withheld; administrator reconciliation is required." },503);
-    }
-    return json(decision === "approved" ? { message: "Approved. Deliver the one-time ticket only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket } : { message: "Request rejected. The claimant receives no recovery ticket." });
+    // The plaintext ticket exists only in this response. Its hash, decision and audit
+    // events were committed together; if any database write failed, the transaction rolled back.
+    return json(decision === "approved"
+      ? { message: "Approved. Deliver the one-time ticket only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket }
+      : { message: "Request rejected. The claimant receives no recovery ticket." });
   }
   return json({ error: "Unknown action" }, 400);
 });
