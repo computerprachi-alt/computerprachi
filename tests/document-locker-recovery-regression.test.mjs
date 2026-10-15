@@ -66,7 +66,7 @@ test("interrupted password operations have audited reconciliation and tickets ar
 
 test("cleanup schedule and privileged SQL access controls are declared", () => {
   assert.match(migration, /enable row level security/i);
-  assert.match(migration, /revoke all on public\.document_recovery_audit from anon, authenticated/i);
+  assert.match(migration, /revoke all on public\.document_recovery_audit from public, anon, authenticated/i);
   assert.match(migration, /purge_document_recovery_requests/);
   assert.match(migration, /document-recovery-daily-cleanup/);
   assert.match(migration, /document_recovery_cleanup_runs/);
