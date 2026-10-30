@@ -170,7 +170,6 @@ $('enrollVerifyForm').addEventListener('submit',async event=>{
     const {error}=await client.auth.mfa.verify({factorId:enrollmentFactorId,challengeId:enrollmentChallengeId,code});
     if(error)throw error;
     $('enrollCode').value='';
-    await client.auth.refreshSession();
     await verifyAal2();
   }catch(error){show(error.message||'TOTP enrollment verification failed.','err');}
   finally{setBusy('enrollVerifyBtn',false,'Verify and activate TOTP');}
@@ -184,7 +183,6 @@ $('challengeForm').addEventListener('submit',async event=>{
     const {error}=await client.auth.mfa.verify({factorId:challengeFactorId,challengeId,code});
     if(error)throw error;
     $('challengeCode').value='';
-    await client.auth.refreshSession();
     await verifyAal2();
   }catch(error){show(error.message||'TOTP challenge failed.','err');}
   finally{setBusy('challengeBtn',false,'Verify TOTP and check AAL2');}
