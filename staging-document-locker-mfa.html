@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Staging Admin MFA | Computer Prachi</title>
+<style>
+:root{--navy:#07145c;--red:#b42318;--green:#176534;--bg:#f3f6fb;--border:#d8dfeb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:#202938}
+.wrap{max-width:720px;margin:30px auto;padding:0 14px}.card{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 5px 22px #173b7a12}
+header{background:var(--navy);color:#fff;padding:22px;text-align:center}header strong{font-size:22px}
+main{padding:24px}.warning{border:1px solid #e6bd58;background:#fff8e7;color:#654b0b;border-radius:8px;padding:13px;line-height:1.5;margin-bottom:18px}
+.project{font:12px monospace;overflow-wrap:anywhere;color:#34415c;background:#f4f7fb;padding:10px;border-radius:6px;margin:10px 0 18px}
+label{display:block;font-weight:700;margin:13px 0 6px;color:#25365f}input{width:100%;height:44px;border:1px solid #c9d2e2;border-radius:6px;padding:0 11px;font:inherit}
+button{min-height:43px;border:0;border-radius:6px;padding:10px 15px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer;margin:10px 8px 0 0}
+button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cursor:wait}
+.panel{border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:18px}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7fb;padding:12px;border-radius:7px;line-height:1.5;margin-top:16px}
+.status.ok{background:#edf8f0;color:#14532d}.status.err{background:#fff0ef;color:#8a1c13}
+#qr{display:block;max-width:220px;width:100%;height:auto;margin:14px auto;border:8px solid #fff;outline:1px solid var(--border)}
+.secret{font:700 15px monospace;overflow-wrap:anywhere;background:#f4f7fb;padding:12px;border-radius:6px;user-select:all}
+.small{font-size:13px;line-height:1.5;color:#59677e}
+[hidden]{display:none!important}
+@media(max-width:600px){.wrap{margin:0;padding:0}.card{border-radius:0;min-height:100vh}main{padding:17px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="wrap"><div class="card">
+<header><strong>COMPUTER PRACHI — STAGING MFA</strong><div>Administrator authentication test</div></header>
+<main>
+<div class="warning"><strong>STAGING ONLY.</strong> This page is hard-wired to the isolated staging Supabase project. Do not enter production credentials. It is a test utility, not the public Document Locker login page.</div>
+<div class="project">Project: sxmfaielpdbiwxfwxbap<br>URL: https://sxmfaielpdbiwxfwxbap.supabase.co</div>
+<section id="loginPanel">
+<h2>Staging administrator sign in</h2>
+<form id="loginForm">
+<label for="email">Staging administrator email</label><input id="email" type="email" autocomplete="username" required>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button id="loginBtn" type="submit">Sign in to staging</button>
+</form>
+</section>
+<section id="authPanel" class="panel" hidden>
+<h2>Multi-factor authentication</h2>
+<p id="account" class="small"></p>
+<p id="aal" class="status">Checking authentication assurance…</p>
+<div id="enrollPanel" hidden>
+<h3>Enroll Authenticator App (TOTP)</h3>
+<p class="small">Scan this QR code using your authenticator app. If scanning is unavailable, enter the secret manually. Do not share the QR code or secret.</p>
+<img id="qr" alt="Staging TOTP enrollment QR code" hidden>
+<p id="secret" class="secret" hidden></p>
+<form id="enrollVerifyForm">
+<label for="enrollCode">6-digit authenticator code</label><input id="enrollCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+<button id="enrollVerifyBtn" type="submit">Verify and activate TOTP</button>
+</form>
+</div>
+<div id="challengePanel" hidden>
+<h3>Verify existing Authenticator App</h3>
+<form id="challengeForm">
+<label for="challengeCode">6-digit authenticator code</label><input id="challengeCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+<button id="challengeBtn" type="submit">Verify TOTP and check AAL2</button>
+</form>
+</div>
+<button id="refreshBtn" class="secondary" type="button">Refresh AAL status</button>
+<button id="logoutBtn" class="secondary" type="button">Sign out</button>
+</section>
+<div id="message" class="status" role="status" aria-live="polite">Loading secure staging sign-in…</div>
+<p class="small">This page uses only Supabase Auth client APIs. The server-side recovery function independently checks the administrator allowlist and AAL2; a successful sign-in here does not grant admin approval privileges by itself.</p>
+</main></div></div>
+<script>
+(function(){
+'use strict';
+const SUPABASE_URL='https://sxmfaielpdbiwxfwxbap.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_td88QLYIBDJUglzEvnNKjQ_ewl2VJzk';
+const PROJECT_REF='sxmfaielpdbiwxfwxbap';
+const $=id=>document.getElementById(id);
+const message=$('message');
+let client=null;
+let enrollmentFactorId=null;
+let enrollmentChallengeId=null;
+let challengeFactorId=null;
+let challengeId=null;
+
+function show(text,kind=''){
+  message.hidden=false;
+  message.className='status'+(kind?' '+kind:'');
+  message.textContent=text;
+}
+function setBusy(id,busy,label){
+  const b=$(id);b.disabled=busy;if(label)b.textContent=busy?'Please wait…':label;
+}
+function hideMfaPanels(){
+  $('enrollPanel').hidden=true;$('challengePanel').hidden=true;
+  $('qr').hidden=true;$('secret').hidden=true;
+}
+async function checkAal(){
+  const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(error)throw error;
+  const current=data.currentLevel||'aal1';
+  const next=data.nextLevel||current;
+  $('aal').textContent='Current session: '+current+'\nNext required level: '+next;
+  $('aal').className='status'+(current==='aal2'?' ok':'');
+  if(current==='aal2'){
+    hideMfaPanels();
+    show('AAL2 VERIFIED. This session has completed a second factor on the staging project.','ok');
+    return;
+  }
+  const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
+  if(factorError)throw factorError;
+  const verified=(factors.totp||[]).filter(f=>f.status==='verified');
+  if(verified.length){
+    challengeFactorId=verified[0].id;
+    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:challengeFactorId});
+    if(challengeError)throw challengeError;
+    challengeId=challenge.id;
+    $('challengePanel').hidden=false;
+    $('enrollPanel').hidden=true;
+    show('Password sign-in succeeded. Enter the current code from the existing authenticator app to obtain AAL2.');
+    return;
+  }
+  if((factors.totp||[]).some(f=>f.status==='unverified')){
+    hideMfaPanels();
+    show('An unverified TOTP factor already exists. For safety this page will not create duplicate factors. Remove the abandoned unverified factor in the staging project Auth user MFA controls, then sign in again.');
+    return;
+  }
+  hideMfaPanels();
+  $('enrollPanel').hidden=false;
+  const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
+    factorType:'totp',
+    friendlyName:'Computer Prachi Staging Admin'
+  });
+  if(enrollError)throw enrollError;
+  enrollmentFactorId=enrollment.id;
+  $('qr').src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(enrollment.totp.qr_code);
+  $('qr').hidden=false;
+  $('secret').textContent='Manual setup key: '+enrollment.totp.secret;
+  $('secret').hidden=false;
+  const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+  if(challengeError)throw challengeError;
+  enrollmentChallengeId=challenge.id;
+  show('TOTP enrollment started. Scan the QR code, then enter the current six-digit code to activate the factor.');
+}
+async function verifyAal2(){
+  const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(error)throw error;
+  $('aal').textContent='Current session: '+(data.currentLevel||'unknown')+'\nNext required level: '+(data.nextLevel||'unknown');
+  $('aal').className='status'+(data.currentLevel==='aal2'?' ok':'');
+  if(data.currentLevel!=='aal2')throw new Error('The Authenticator code was accepted but this session is not yet AAL2. Refresh the session and check again.');
+  hideMfaPanels();
+  show('SUCCESS: STAGING ADMIN SESSION IS AAL2. The second factor was verified by Supabase Auth.','ok');
+}
+$('loginForm').addEventListener('submit',async event=>{
+  event.preventDefault();setBusy('loginBtn',true,'Sign in to staging');
+  try{
+    const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    if(error)throw error;
+    if(!data.session)throw new Error('No staging session was created.');
+    $('loginPanel').hidden=true;$('authPanel').hidden=false;
+    $('account').textContent='Signed in as: '+(data.user.email||'staging user')+' — project '+PROJECT_REF;
+    await checkAal();
+  }catch(error){show(error.message||'Staging sign-in failed.');}
+  finally{setBusy('loginBtn',false,'Sign in to staging');$('password').value='';}
+});
+$('enrollVerifyForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const code=$('enrollCode').value.trim();
+  if(!/^\d{6}$/.test(code)){show('Enter the six-digit code from your authenticator app.','err');return;}
+  setBusy('enrollVerifyBtn',true,'Verify and activate TOTP');
+  try{
+    const {error}=await client.auth.mfa.verify({factorId:enrollmentFactorId,challengeId:enrollmentChallengeId,code});
+    if(error)throw error;
+    $('enrollCode').value='';
+    await verifyAal2();
+  }catch(error){show(error.message||'TOTP enrollment verification failed.','err');}
+  finally{setBusy('enrollVerifyBtn',false,'Verify and activate TOTP');}
+});
+$('challengeForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const code=$('challengeCode').value.trim();
+  if(!/^\d{6}$/.test(code)){show('Enter the six-digit code from your authenticator app.','err');return;}
+  setBusy('challengeBtn',true,'Verify TOTP and check AAL2');
+  try{
+    const {error}=await client.auth.mfa.verify({factorId:challengeFactorId,challengeId,code});
+    if(error)throw error;
+    $('challengeCode').value='';
+    await verifyAal2();
+  }catch(error){show(error.message||'TOTP challenge failed.','err');}
+  finally{setBusy('challengeBtn',false,'Verify TOTP and check AAL2');}
+});
+$('refreshBtn').addEventListener('click',async()=>{
+  try{await client.auth.refreshSession();await verifyAal2();}
+  catch(error){show(error.message||'Could not refresh AAL status.','err');}
+});
+$('logoutBtn').addEventListener('click',async()=>{
+  try{const {error}=await client.auth.signOut();if(error)throw error;
+    $('authPanel').hidden=true;$('loginPanel').hidden=false;hideMfaPanels();
+    $('aal').textContent='Signed out.';show('Signed out from the staging project.');
+  }catch(error){show(error.message||'Sign-out failed.','err');}
+});
+if(new URL(SUPABASE_URL).hostname!==(PROJECT_REF+'.supabase.co')){
+  show('STAGING CONFIGURATION CHECK FAILED. Sign-in has been disabled.','err');
+}else if(!window.supabase||typeof window.supabase.createClient!=='function'){
+  show('Supabase Auth client could not be loaded. Check your connection and reload.','err');
+}else{
+  client=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+  });
+  show('Staging project identity verified. You can sign in with the staging administrator account.','ok');
+}
+})();
+</script>
+</body>
+</html>
