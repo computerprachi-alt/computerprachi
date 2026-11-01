@@ -116,8 +116,8 @@ async function checkAal(){
     if(aalError)throw aalError;
     const current=aalData.currentLevel||'aal1';
     const next=aalData.nextLevel||current;
-    $('aal').textContent='Current session: '+current+'\\nNext required level: '+next+
-      '\\nFresh Auth factor check: '+verified.length+' verified, '+unverified.length+' unverified TOTP factor(s).';
+    $('aal').textContent='Current session: '+current+'\nNext required level: '+next+
+      '\nFresh Auth factor check: '+verified.length+' verified, '+unverified.length+' unverified TOTP factor(s).';
     $('aal').className='status'+(current==='aal2'?' ok':'');
 
     if(current==='aal2'){
@@ -140,6 +140,11 @@ async function checkAal(){
       const samePageEnrollment=unverified.find(f=>f.id===enrollmentFactorId);
       $('challengePanel').hidden=true;
       if(samePageEnrollment && $('qr').getAttribute('src')){
+        if(!enrollmentChallengeId){
+          const {data:retryChallenge,error:retryChallengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+          if(retryChallengeError)throw retryChallengeError;
+          enrollmentChallengeId=retryChallenge.id;
+        }
         $('enrollPanel').hidden=false;
         show('Fresh factor check confirms this page’s unverified enrollment. Scan the QR code below and verify it; no duplicate enrollment was created.');
       }else{
@@ -173,9 +178,9 @@ async function checkAal(){
       const afterUnverified=afterTotp.filter(f=>f.status==='unverified');
       hideMfaPanels();
       if(afterUnverified.length){
-        show(enrollError.message+'\\nA follow-up Auth check found '+afterUnverified.length+' unverified factor(s). No QR secret is available from listFactors(); remove the abandoned factor in STAGING and sign in again.','err');
+        show(enrollError.message+'\nA follow-up Auth check found '+afterUnverified.length+' unverified factor(s). No QR secret is available from listFactors(); remove the abandoned factor in STAGING and sign in again.','err');
       }else{
-        show(enrollError.message+'\\nA follow-up Auth check still returned no TOTP factors. Enrollment did not complete; no QR code is available. Check the staging Auth user factor list before retrying.','err');
+        show(enrollError.message+'\nA follow-up Auth check still returned no TOTP factors. Enrollment did not complete; no QR code is available. Check the staging Auth user factor list before retrying.','err');
       }
       return;
     }
@@ -202,7 +207,7 @@ async function checkAal(){
     const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
     if(challengeError){
       enrollmentChallengeId=null;
-      show('TOTP factor and QR code were created, but challenge creation failed: '+challengeError.message+'\\nThe QR/manual key is still shown. Use Refresh after checking the staging Auth status.','err');
+      show('TOTP factor and QR code were created, but challenge creation failed: '+challengeError.message+'\nThe QR/manual key is still shown. Use Refresh after checking the staging Auth status.','err');
       return;
     }
     enrollmentChallengeId=challenge.id;
@@ -246,6 +251,11 @@ $('enrollVerifyForm').addEventListener('submit',async event=>{
   if(!/^\d{6}$/.test(code)){show('Enter the six-digit code from your authenticator app.','err');return;}
   setBusy('enrollVerifyBtn',true,'Verify and activate TOTP');
   try{
+    if(!enrollmentChallengeId){
+      const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+      if(challengeError)throw challengeError;
+      enrollmentChallengeId=challenge.id;
+    }
     const {error}=await client.auth.mfa.verify({factorId:enrollmentFactorId,challengeId:enrollmentChallengeId,code});
     if(error)throw error;
     $('enrollCode').value='';
