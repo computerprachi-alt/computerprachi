@@ -80,6 +80,8 @@ let enrollmentFactorId=null;
 let enrollmentChallengeId=null;
 let challengeFactorId=null;
 let challengeId=null;
+let checkingMfa=false;
+let qrRenderFailed=false;
 
 function show(text,kind=''){
   message.hidden=false;
@@ -94,51 +96,124 @@ function hideMfaPanels(){
   $('qr').hidden=true;$('secret').hidden=true;
 }
 async function checkAal(){
-  const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
-  if(error)throw error;
-  const current=data.currentLevel||'aal1';
-  const next=data.nextLevel||current;
-  $('aal').textContent='Current session: '+current+'\nNext required level: '+next;
-  $('aal').className='status'+(current==='aal2'?' ok':'');
-  if(current==='aal2'){
+  if(checkingMfa)return;
+  checkingMfa=true;
+  setBusy('refreshBtn',true,'Refresh AAL and MFA factors');
+  try{
+    const {data:sessionData,error:sessionError}=await client.auth.getSession();
+    if(sessionError)throw sessionError;
+    if(!sessionData.session)throw new Error('No active staging session. Sign in again.');
+
+    // listFactors() is a server-backed Auth request; do not infer factor state from
+    // cached page variables or the previous AAL display.
+    const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
+    if(factorError)throw factorError;
+    const totp=Array.isArray(factors?.totp)?factors.totp:[];
+    const verified=totp.filter(f=>f.status==='verified');
+    const unverified=totp.filter(f=>f.status==='unverified');
+
+    const {data:aalData,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(aalError)throw aalError;
+    const current=aalData.currentLevel||'aal1';
+    const next=aalData.nextLevel||current;
+    $('aal').textContent='Current session: '+current+'\\nNext required level: '+next+
+      '\\nFresh Auth factor check: '+verified.length+' verified, '+unverified.length+' unverified TOTP factor(s).';
+    $('aal').className='status'+(current==='aal2'?' ok':'');
+
+    if(current==='aal2'){
+      hideMfaPanels();
+      show('AAL2 VERIFIED. This staging session has completed a second factor.','ok');
+      return;
+    }
+    if(verified.length){
+      challengeFactorId=verified[0].id;
+      enrollmentFactorId=null;enrollmentChallengeId=null;
+      $('enrollPanel').hidden=true;$('challengePanel').hidden=false;
+      $('qr').hidden=true;$('secret').hidden=true;
+      const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:challengeFactorId});
+      if(challengeError)throw challengeError;
+      challengeId=challenge.id;
+      show('Fresh factor check found an existing verified TOTP factor. Enter its current six-digit code to obtain AAL2.');
+      return;
+    }
+    if(unverified.length){
+      const samePageEnrollment=unverified.find(f=>f.id===enrollmentFactorId);
+      $('challengePanel').hidden=true;
+      if(samePageEnrollment && $('qr').getAttribute('src')){
+        $('enrollPanel').hidden=false;
+        show('Fresh factor check confirms this page’s unverified enrollment. Scan the QR code below and verify it; no duplicate enrollment was created.');
+      }else{
+        hideMfaPanels();
+        show('Supabase reports '+unverified.length+' unverified TOTP factor(s), but this page does not have their original QR secret. Do not enroll again. Remove the abandoned factor in the STAGING project, then sign out and sign in again.');
+      }
+      return;
+    }
+
+    // Do not start a second enrollment if this page already has an enrollment
+    // response in memory (for example, after pressing Refresh).
+    if(enrollmentFactorId && $('qr').getAttribute('src')){
+      $('enrollPanel').hidden=false;$('challengePanel').hidden=true;
+      show('Enrollment is already in progress in this page. Use the displayed QR code; no second enroll request was sent.');
+      return;
+    }
+
     hideMfaPanels();
-    show('AAL2 VERIFIED. This session has completed a second factor on the staging project.','ok');
-    return;
-  }
-  const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
-  if(factorError)throw factorError;
-  const verified=(factors.totp||[]).filter(f=>f.status==='verified');
-  if(verified.length){
-    challengeFactorId=verified[0].id;
-    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:challengeFactorId});
-    if(challengeError)throw challengeError;
-    challengeId=challenge.id;
-    $('challengePanel').hidden=false;
-    $('enrollPanel').hidden=true;
-    show('Password sign-in succeeded. Enter the current code from the existing authenticator app to obtain AAL2.');
-    return;
-  }
-  if((factors.totp||[]).some(f=>f.status==='unverified')){
+    $('qr').removeAttribute('src');$('secret').textContent='';
+    qrRenderFailed=false;
+    show('No TOTP factor was returned by the fresh Auth check. Starting one new staging enrollment…');
+    const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
+      factorType:'totp',
+      friendlyName:'Computer Prachi Staging Admin'
+    });
+    if(enrollError){
+      // Re-check after a conflict so the UI reports the actual server state.
+      const {data:afterData,error:afterError}=await client.auth.mfa.listFactors();
+      if(afterError)throw new Error(enrollError.message+' | Follow-up factor check failed: '+afterError.message);
+      const afterTotp=Array.isArray(afterData?.totp)?afterData.totp:[];
+      const afterUnverified=afterTotp.filter(f=>f.status==='unverified');
+      hideMfaPanels();
+      if(afterUnverified.length){
+        show(enrollError.message+'\\nA follow-up Auth check found '+afterUnverified.length+' unverified factor(s). No QR secret is available from listFactors(); remove the abandoned factor in STAGING and sign in again.','err');
+      }else{
+        show(enrollError.message+'\\nA follow-up Auth check still returned no TOTP factors. Enrollment did not complete; no QR code is available. Check the staging Auth user factor list before retrying.','err');
+      }
+      return;
+    }
+    if(!enrollment?.id || !enrollment?.totp?.qr_code || !enrollment?.totp?.secret){
+      hideMfaPanels();
+      throw new Error('Supabase enroll() returned an incomplete TOTP response (missing factor ID, QR SVG, or manual setup key). No enrollment panel will be shown.');
+    }
+
+    enrollmentFactorId=enrollment.id;
+    $('enrollPanel').hidden=false;$('challengePanel').hidden=true;
+    const qrSvg=String(enrollment.totp.qr_code).trim();
+    $('qr').onerror=()=>{
+      qrRenderFailed=true;$('qr').hidden=true;
+      show('Supabase created the TOTP factor, but this browser could not render its QR SVG. The manual setup key remains available below. Do not share it.','err');
+    };
+    $('qr').onload=()=>{qrRenderFailed=false;};
+    $('qr').src=qrSvg.startsWith('data:image/')
+      ? qrSvg
+      : 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qrSvg);
+    $('qr').hidden=false;
+    $('secret').textContent='Manual setup key: '+enrollment.totp.secret;
+    $('secret').hidden=false;
+
+    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+    if(challengeError){
+      enrollmentChallengeId=null;
+      show('TOTP factor and QR code were created, but challenge creation failed: '+challengeError.message+'\\nThe QR/manual key is still shown. Use Refresh after checking the staging Auth status.','err');
+      return;
+    }
+    enrollmentChallengeId=challenge.id;
+    show('TOTP enrollment started successfully. Scan the QR code, then enter the current six-digit code to activate the factor. Do not share the QR code or manual key.');
+  }catch(error){
     hideMfaPanels();
-    show('An unverified TOTP factor already exists. For safety this page will not create duplicate factors. Remove the abandoned unverified factor in the staging project Auth user MFA controls, then sign in again.');
-    return;
+    show(error?.message||'Staging MFA check failed. No QR enrollment panel is being shown.','err');
+  }finally{
+    checkingMfa=false;
+    setBusy('refreshBtn',false,'Refresh AAL and MFA factors');
   }
-  hideMfaPanels();
-  $('enrollPanel').hidden=false;
-  const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
-    factorType:'totp',
-    friendlyName:'Computer Prachi Staging Admin'
-  });
-  if(enrollError)throw enrollError;
-  enrollmentFactorId=enrollment.id;
-  $('qr').src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(enrollment.totp.qr_code);
-  $('qr').hidden=false;
-  $('secret').textContent='Manual setup key: '+enrollment.totp.secret;
-  $('secret').hidden=false;
-  const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
-  if(challengeError)throw challengeError;
-  enrollmentChallengeId=challenge.id;
-  show('TOTP enrollment started. Scan the QR code, then enter the current six-digit code to activate the factor.');
 }
 async function verifyAal2(){
   const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -152,6 +227,10 @@ async function verifyAal2(){
 $('loginForm').addEventListener('submit',async event=>{
   event.preventDefault();setBusy('loginBtn',true,'Sign in to staging');
   try{
+    // Clear only this utility's local session before password sign-in.
+    const {error:clearError}=await client.auth.signOut({scope:'local'});
+    if(clearError)throw clearError;
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
     const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
     if(error)throw error;
     if(!data.session)throw new Error('No staging session was created.');
@@ -188,13 +267,18 @@ $('challengeForm').addEventListener('submit',async event=>{
   finally{setBusy('challengeBtn',false,'Verify TOTP and check AAL2');}
 });
 $('refreshBtn').addEventListener('click',async()=>{
-  try{await client.auth.refreshSession();await verifyAal2();}
-  catch(error){show(error.message||'Could not refresh AAL status.','err');}
+  try{
+    const {error}=await client.auth.refreshSession();
+    if(error)throw error;
+    await checkAal();
+  }catch(error){show(error.message||'Could not refresh staging MFA status.','err');}
 });
 $('logoutBtn').addEventListener('click',async()=>{
   try{const {error}=await client.auth.signOut();if(error)throw error;
     $('authPanel').hidden=true;$('loginPanel').hidden=false;hideMfaPanels();
-    $('aal').textContent='Signed out.';show('Signed out from the staging project.');
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
+    $('qr').removeAttribute('src');$('secret').textContent='';$('aal').textContent='Signed out.';
+    show('Signed out from this staging MFA page. Sign in again to fetch a fresh server-side factor list.');
   }catch(error){show(error.message||'Sign-out failed.','err');}
 });
 if(new URL(SUPABASE_URL).hostname!==(PROJECT_REF+'.supabase.co')){
@@ -203,7 +287,7 @@ if(new URL(SUPABASE_URL).hostname!==(PROJECT_REF+'.supabase.co')){
   show('Supabase Auth client could not be loaded. Check your connection and reload.','err');
 }else{
   client=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
-    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storageKey:'cp-staging-document-locker-mfa-v2'}
   });
   show('Staging project identity verified. You can sign in with the staging administrator account.','ok');
 }
