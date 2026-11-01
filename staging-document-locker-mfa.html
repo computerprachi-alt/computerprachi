@@ -154,14 +154,9 @@ async function checkAal(){
       return;
     }
 
-    // Do not start a second enrollment if this page already has an enrollment
-    // response in memory (for example, after pressing Refresh).
-    if(enrollmentFactorId && $('qr').getAttribute('src')){
-      $('enrollPanel').hidden=false;$('challengePanel').hidden=true;
-      show('Enrollment is already in progress in this page. Use the displayed QR code; no second enroll request was sent.');
-      return;
-    }
-
+    // An empty fresh server-side factor list means any prior in-memory
+    // enrollment was removed or is stale. Discard its QR/challenge state.
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
     hideMfaPanels();
     $('qr').removeAttribute('src');$('secret').textContent='';
     qrRenderFailed=false;
@@ -284,7 +279,7 @@ $('refreshBtn').addEventListener('click',async()=>{
   }catch(error){show(error.message||'Could not refresh staging MFA status.','err');}
 });
 $('logoutBtn').addEventListener('click',async()=>{
-  try{const {error}=await client.auth.signOut();if(error)throw error;
+  try{const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;
     $('authPanel').hidden=true;$('loginPanel').hidden=false;hideMfaPanels();
     enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
     $('qr').removeAttribute('src');$('secret').textContent='';$('aal').textContent='Signed out.';
