@@ -141,16 +141,26 @@ async function checkAal(){
     const groupIds=new Set(grouped.map(f=>f?.id).filter(Boolean));
     const groupsConsistent=allAvailable && allIds.size===groupIds.size && [...allIds].every(id=>groupIds.has(id));
     const typeSummary=returnedGroups.map(([type,items])=>type+': '+items.length).join(', ')||'No typed factor arrays returned';
+    // Show only non-secret metadata for the exact friendly-name match.
+    // Factor IDs are identifiers, not credentials; never render session tokens,
+    // QR payloads, or TOTP setup secrets in this diagnostic.
     const matchSummary=nameMatches.length
-      ? nameMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')+' name="'+String(f.friendly_name||'')+'"').join('; ')
+      ? nameMatches.map(f=>'ID: '+String(f.id||'unavailable')+
+          ' | type: '+String(f.factor_type||'unknown')+
+          ' | status: '+String(f.status||'unknown')+
+          ' | friendly name: '+String(f.friendly_name||'')).join('\\n')
       : 'none';
+    const authenticatedEmail=String(userData?.user?.email||'').trim().toLowerCase();
+    const emailMatches=authenticatedEmail==='computerprachi@gmail.com';
     $('factorDiagnostics').textContent=
-      'IDENTITY CHECK: PASS\\n'+
+      'IDENTITY CHECK: '+(emailMatches?'PASS':'FAIL')+'\\n'+
+      'AUTH USER: '+(authenticatedEmail||'unavailable')+'\\n'+
+      'PROJECT: '+PROJECT_REF+'\\n'+
       'FACTOR GROUPS: '+typeSummary+'\\n'+
       'AGGREGATE all[]: '+(allAvailable?'available ('+all.length+')':'MISSING')+'\\n'+
       'DEDUPED FACTORS: '+everyFactor.length+'\\n'+
       'GROUP CONSISTENCY: '+(groupsConsistent?'PASS':'FAIL')+'\\n'+
-      'EXACT FRIENDLY-NAME MATCHES: '+nameMatches.length+' — '+matchSummary;
+      'EXACT FRIENDLY-NAME MATCHES: '+nameMatches.length+'\\n'+matchSummary;
     if(!groupsConsistent){
       hideMfaPanels();
       throw new Error('Auth factor data is incomplete or inconsistent. Enrollment was blocked. Read the factor diagnostics and do not retry until the mismatch is resolved.');
