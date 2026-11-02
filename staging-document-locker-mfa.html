@@ -44,6 +44,7 @@ button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cu
 <h2>Multi-factor authentication</h2>
 <p id="account" class="small"></p>
 <p id="aal" class="status">Checking authentication assurance…</p>
+<p id="factorDiagnostics" class="status small" aria-live="polite">Waiting for authenticated factor diagnostics…</p>
 <div id="enrollPanel" hidden>
 <h3>Enroll Authenticator App (TOTP)</h3>
 <p class="small">Scan this QR code using your authenticator app. If scanning is unavailable, enter the secret manually. Do not share the QR code or secret.</p>
@@ -102,15 +103,58 @@ async function checkAal(){
   try{
     const {data:sessionData,error:sessionError}=await client.auth.getSession();
     if(sessionError)throw sessionError;
-    if(!sessionData.session)throw new Error('No active staging session. Sign in again.');
+    if(!sessionData.session?.user?.id)throw new Error('No active staging session. Sign in again.');
 
-    // listFactors() is a server-backed Auth request; do not infer factor state from
-    // cached page variables or the previous AAL display.
+    // Validate the current session against the Auth server. Never display or log
+    // the access token; compare only the authenticated user ID.
+    const {data:userData,error:userError}=await client.auth.getUser(sessionData.session.access_token);
+    if(userError)throw new Error('Auth user validation failed: '+userError.message);
+    const sessionUserId=sessionData.session.user.id;
+    const authUserId=userData?.user?.id;
+    if(!authUserId || authUserId!==sessionUserId){
+      $('factorDiagnostics').textContent='IDENTITY CHECK: FAILED. Session user and Auth server user do not match.';
+      throw new Error('Staging identity mismatch. Sign out and sign in again. MFA enrollment was blocked.');
+    }
+    $('factorDiagnostics').textContent='IDENTITY CHECK: PASS. Session user matches Auth server user.\\nChecking all Auth factor types…';
+
+    // listFactors() returns all plus type-specific groups. Preserve every array
+    // returned by the installed SDK and compare the aggregate against its groups.
     const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
     if(factorError)throw factorError;
-    const totp=Array.isArray(factors?.totp)?factors.totp:[];
+    if(!factors || typeof factors!=='object')throw new Error('Auth factor check returned no usable data. Enrollment was blocked.');
+    const returnedGroups=Object.entries(factors).filter(([key,value])=>key!=='all' && Array.isArray(value));
+    const allAvailable=Array.isArray(factors.all);
+    const all=allAvailable?factors.all:[];
+    const grouped=returnedGroups.flatMap(([,items])=>items);
+    const byId=new Map();
+    for(const factor of [...all,...grouped]){
+      if(factor?.id)byId.set(factor.id,factor);
+    }
+    const everyFactor=[...byId.values()];
+    const totp=Array.isArray(factors.totp)?factors.totp:[];
+    const phone=Array.isArray(factors.phone)?factors.phone:[];
     const verified=totp.filter(f=>f.status==='verified');
     const unverified=totp.filter(f=>f.status==='unverified');
+    const exactName='Computer Prachi Staging Admin';
+    const nameMatches=everyFactor.filter(f=>(f.friendly_name||'').trim()===exactName);
+    const allIds=new Set(all.map(f=>f?.id).filter(Boolean));
+    const groupIds=new Set(grouped.map(f=>f?.id).filter(Boolean));
+    const groupsConsistent=allAvailable && allIds.size===groupIds.size && [...allIds].every(id=>groupIds.has(id));
+    const typeSummary=returnedGroups.map(([type,items])=>type+': '+items.length).join(', ')||'No typed factor arrays returned';
+    const matchSummary=nameMatches.length
+      ? nameMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')+' name="'+String(f.friendly_name||'')+'"').join('; ')
+      : 'none';
+    $('factorDiagnostics').textContent=
+      'IDENTITY CHECK: PASS\\n'+
+      'FACTOR GROUPS: '+typeSummary+'\\n'+
+      'AGGREGATE all[]: '+(allAvailable?'available ('+all.length+')':'MISSING')+'\\n'+
+      'DEDUPED FACTORS: '+everyFactor.length+'\\n'+
+      'GROUP CONSISTENCY: '+(groupsConsistent?'PASS':'FAIL')+'\\n'+
+      'EXACT FRIENDLY-NAME MATCHES: '+nameMatches.length+' — '+matchSummary;
+    if(!groupsConsistent){
+      hideMfaPanels();
+      throw new Error('Auth factor data is incomplete or inconsistent. Enrollment was blocked. Read the factor diagnostics and do not retry until the mismatch is resolved.');
+    }
 
     const {data:aalData,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
     if(aalError)throw aalError;
@@ -123,6 +167,13 @@ async function checkAal(){
     if(current==='aal2'){
       hideMfaPanels();
       show('AAL2 VERIFIED. This staging session has completed a second factor.','ok');
+      return;
+    }
+    if(nameMatches.length){
+      hideMfaPanels();
+      show('ENROLLMENT BLOCKED: friendly-name conflict is visible in the factor diagnostics. Matching factor type/status: '+
+        nameMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')).join(', ')+
+        '. No new factor was created.','err');
       return;
     }
     if(verified.length){
@@ -166,17 +217,23 @@ async function checkAal(){
       friendlyName:'Computer Prachi Staging Admin'
     });
     if(enrollError){
-      // Re-check after a conflict so the UI reports the actual server state.
       const {data:afterData,error:afterError}=await client.auth.mfa.listFactors();
       if(afterError)throw new Error(enrollError.message+' | Follow-up factor check failed: '+afterError.message);
-      const afterTotp=Array.isArray(afterData?.totp)?afterData.totp:[];
-      const afterUnverified=afterTotp.filter(f=>f.status==='unverified');
+      const afterGroups=Object.entries(afterData||{}).filter(([key,value])=>key!=='all' && Array.isArray(value));
+      const afterAll=Array.isArray(afterData?.all)?afterData.all:[];
+      const afterGrouped=afterGroups.flatMap(([,items])=>items);
+      const afterMap=new Map();
+      for(const factor of [...afterAll,...afterGrouped])if(factor?.id)afterMap.set(factor.id,factor);
+      const afterFactors=[...afterMap.values()];
+      const afterMatches=afterFactors.filter(f=>(f.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+      const afterTypes=afterGroups.map(([type,items])=>type+': '+items.length).join(', ')||'none';
+      $('factorDiagnostics').textContent=
+        'IDENTITY CHECK: PASS\\nENROLL RESULT: FAILED\\nFOLLOW-UP FACTOR GROUPS: '+afterTypes+
+        '\\nFOLLOW-UP all[]: '+(Array.isArray(afterData?.all)?'available ('+afterAll.length+')':'MISSING')+
+        '\\nEXACT FRIENDLY-NAME MATCHES: '+afterMatches.length+
+        (afterMatches.length?' — '+afterMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')).join(', '):' — none visible');
       hideMfaPanels();
-      if(afterUnverified.length){
-        show(enrollError.message+'\nA follow-up Auth check found '+afterUnverified.length+' unverified factor(s). No QR secret is available from listFactors(); remove the abandoned factor in STAGING and sign in again.','err');
-      }else{
-        show(enrollError.message+'\nA follow-up Auth check still returned no TOTP factors. Enrollment did not complete; no QR code is available. Check the staging Auth user factor list before retrying.','err');
-      }
+      show(enrollError.message+'\\nNo QR was created. Follow-up factor diagnostics are shown above. No automatic retry or alternate friendly name was used.','err');
       return;
     }
     if(!enrollment?.id || !enrollment?.totp?.qr_code || !enrollment?.totp?.secret){
