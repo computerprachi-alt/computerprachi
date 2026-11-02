@@ -45,6 +45,8 @@ button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cu
 <p id="account" class="small"></p>
 <p id="aal" class="status">Checking authentication assurance…</p>
 <p id="factorDiagnostics" class="status small" aria-live="polite">Waiting for authenticated factor diagnostics…</p>
+<button id="removeAbandonedFactorBtn" class="secondary" type="button" hidden>Remove exact abandoned unverified staging factor</button>
+<p id="removeFactorNote" class="small" hidden>This action rechecks the signed-in identity and exact factor metadata immediately before calling Supabase Auth. It will not remove any other factor.</p>
 <div id="enrollPanel" hidden>
 <h3>Enroll Authenticator App (TOTP)</h3>
 <p class="small">Scan this QR code using your authenticator app. The setup key is intentionally not printed or logged by this diagnostic page. Do not share the QR code.</p>
@@ -161,6 +163,22 @@ async function checkAal(){
       'DEDUPED FACTORS: '+everyFactor.length+'\\n'+
       'GROUP CONSISTENCY: '+(groupsConsistent?'PASS':'FAIL')+'\\n'+
       'EXACT FRIENDLY-NAME MATCHES: '+nameMatches.length+'\\n'+matchSummary;
+    // Show removal only for the exact target from a fresh aggregate factor list.
+    const targetId='ac27fe1f-f97d-4ae4-a47c-6eab3235c20f';
+    const targetInAll=all.filter(f=>f?.id===targetId);
+    const allNameMatches=all.filter(f=>(f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    const targetFactor=targetInAll.length===1?targetInAll[0]:null;
+    const targetReady=emailMatches && PROJECT_REF==='sxmfaielpdbiwxfwxbap' &&
+      targetInAll.length===1 && allNameMatches.length===1 &&
+      targetFactor?.factor_type==='totp' && targetFactor?.status==='unverified' &&
+      (targetFactor?.friendly_name||'').trim()==='Computer Prachi Staging Admin';
+    $('removeAbandonedFactorBtn').hidden=!targetReady;
+    $('removeFactorNote').hidden=!targetReady;
+    if(targetReady){
+      hideMfaPanels();
+      show('Exact abandoned staging factor identified. Review the Factor ID and status above, then click the removal button to run a second fresh check and remove only this factor.');
+      return;
+    }
     if(!groupsConsistent){
       hideMfaPanels();
       throw new Error('Auth factor data is incomplete or inconsistent. Enrollment was blocked. Read the factor diagnostics and do not retry until the mismatch is resolved.');
@@ -338,6 +356,70 @@ $('challengeForm').addEventListener('submit',async event=>{
     await verifyAal2();
   }catch(error){show(error.message||'TOTP challenge failed.','err');}
   finally{setBusy('challengeBtn',false,'Verify TOTP and check AAL2');}
+});
+$('removeAbandonedFactorBtn').addEventListener('click',async()=>{
+  const button=$('removeAbandonedFactorBtn');
+  button.disabled=true;
+  const originalLabel=button.textContent;
+  button.textContent='Rechecking exact factor…';
+  try{
+    const {data:sessionData,error:sessionError}=await client.auth.getSession();
+    if(sessionError)throw sessionError;
+    const sessionUserId=sessionData?.session?.user?.id;
+    if(!sessionUserId)throw new Error('No active staging session. Sign in again.');
+    const {data:userData,error:userError}=await client.auth.getUser(sessionData.session.access_token);
+    if(userError)throw userError;
+    if(userData?.user?.id!==sessionUserId ||
+       String(userData?.user?.email||'').trim().toLowerCase()!=='computerprachi@gmail.com'){
+      throw new Error('Auth user check failed. No factor was removed.');
+    }
+    if(PROJECT_REF!=='sxmfaielpdbiwxfwxbap' ||
+       SUPABASE_URL!=='https://sxmfaielpdbiwxfwxbap.supabase.co' ||
+       new URL(SUPABASE_URL).hostname!=='sxmfaielpdbiwxfwxbap.supabase.co'){
+      throw new Error('Staging project check failed. No factor was removed.');
+    }
+    const {data:fresh,error:freshError}=await client.auth.mfa.listFactors();
+    if(freshError)throw freshError;
+    if(!Array.isArray(fresh?.all))throw new Error('Fresh aggregate all[] is unavailable. No factor was removed.');
+    const targetId='ac27fe1f-f97d-4ae4-a47c-6eab3235c20f';
+    const byId=fresh.all.filter(f=>f?.id===targetId);
+    const byName=fresh.all.filter(f=>(f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    if(byId.length!==1 || byName.length!==1 || byId[0]?.id!==byName[0]?.id ||
+       byId[0]?.factor_type!=='totp' || byId[0]?.status!=='unverified' ||
+       (byId[0]?.friendly_name||'').trim()!=='Computer Prachi Staging Admin'){
+      throw new Error('Exact factor recheck failed (ID, uniqueness, type, status, or friendly name). No factor was removed.');
+    }
+    button.textContent='Removing exact factor…';
+    const {error:removeError}=await client.auth.mfa.unenroll({factorId:targetId});
+    if(removeError)throw removeError;
+    const {data:after,error:afterError}=await client.auth.mfa.listFactors();
+    if(afterError)throw new Error('Unenroll returned success, but post-removal verification failed: '+afterError.message);
+    if(!Array.isArray(after?.all))throw new Error('Unenroll returned success, but post-removal all[] is unavailable.');
+    const afterGroups=Object.entries(after).filter(([key,value])=>key!=='all' && Array.isArray(value));
+    const afterGrouped=afterGroups.flatMap(([,items])=>items);
+    const stillInAll=after.all.some(f=>f?.id===targetId || (f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    const stillInGroups=afterGrouped.some(f=>f?.id===targetId || (f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    const remainingMatches=[...after.all,...afterGrouped].filter(f=>(f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    $('factorDiagnostics').textContent=
+      'POST-REMOVAL VERIFICATION\\nPROJECT: '+PROJECT_REF+
+      '\\nAUTH USER: '+String(userData.user.email||'').trim().toLowerCase()+
+      '\\nMATCHING FRIENDLY-NAME FACTORS: '+remainingMatches.length+
+      '\\nTARGET ID IN all[]: '+(after.all.some(f=>f?.id===targetId)?'YES':'NO')+
+      '\\nTARGET ID IN TYPED GROUPS: '+(afterGrouped.some(f=>f?.id===targetId)?'YES':'NO')+
+      '\\nAGGREGATE all[]: '+after.all.length+
+      '\\nTYPED GROUPS: '+afterGroups.map(([type,items])=>type+': '+items.length).join(', ');
+    if(stillInAll || stillInGroups || remainingMatches.length){
+      throw new Error('Supabase unenroll was called, but the fresh factor list still shows a matching factor. Do not start a new enrollment.');
+    }
+    button.hidden=true;
+    $('removeFactorNote').hidden=true;
+    show('REMOVAL CONFIRMED: the exact unverified staging factor is absent from fresh all[] and typed factor groups. Click “Refresh AAL status” once to start a new TOTP enrollment and display a new QR code.','ok');
+  }catch(error){
+    show(error?.message||'Staging factor removal failed. No further action was taken.','err');
+  }finally{
+    button.disabled=false;
+    button.textContent=originalLabel;
+  }
 });
 $('refreshBtn').addEventListener('click',async()=>{
   try{
