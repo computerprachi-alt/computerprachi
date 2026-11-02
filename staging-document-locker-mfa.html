@@ -47,7 +47,7 @@ button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cu
 <p id="factorDiagnostics" class="status small" aria-live="polite">Waiting for authenticated factor diagnostics…</p>
 <div id="enrollPanel" hidden>
 <h3>Enroll Authenticator App (TOTP)</h3>
-<p class="small">Scan this QR code using your authenticator app. If scanning is unavailable, enter the secret manually. Do not share the QR code or secret.</p>
+<p class="small">Scan this QR code using your authenticator app. The setup key is intentionally not printed or logged by this diagnostic page. Do not share the QR code.</p>
 <img id="qr" alt="Staging TOTP enrollment QR code" hidden>
 <p id="secret" class="secret" hidden></p>
 <form id="enrollVerifyForm">
@@ -253,8 +253,9 @@ async function checkAal(){
       ? qrSvg
       : 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qrSvg);
     $('qr').hidden=false;
-    $('secret').textContent='Manual setup key: '+enrollment.totp.secret;
-    $('secret').hidden=false;
+    // Never render or log the raw TOTP secret/manual setup key.
+    $('secret').textContent='';
+    $('secret').hidden=true;
 
     const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
     if(challengeError){
