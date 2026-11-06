@@ -1,0 +1,288 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const url = Deno.env.get("SUPABASE_URL")!;
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const adminEmails = (Deno.env.get("RECOVERY_ADMIN_EMAILS") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
+const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "https://computerprachi.online", "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
+const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))).map(b => b.toString(16).padStart(2,"0")).join("");
+const randomToken = (n = 32) => { const b = crypto.getRandomValues(new Uint8Array(n)); return Array.from(b).map(x => x.toString(16).padStart(2,"0")).join(""); };
+const clean = (s: unknown, max = 180) => typeof s === "string" ? s.trim().replace(/[\u0000-\u001f\u007f]/g, "").slice(0,max) : "";
+async function authContext(req: Request) {
+  const h = req.headers.get("authorization") || "";
+  if (!h.startsWith("Bearer ")) return null;
+  const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: h } } });
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) return null;
+  return { user: data.user, client };
+}
+async function userFromRequest(req: Request) {
+  return (await authContext(req))?.user ?? null;
+}
+async function requireAdminMfa(req: Request) {
+  const context = await authContext(req);
+  const user = context?.user;
+  if (!user?.email || !user.email_confirmed_at || !adminEmails.includes(user.email.toLowerCase())) return null;
+  // Require a current AAL2 session; allowlist membership alone is not MFA.
+  const { data, error } = await context!.client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || data.currentLevel !== "aal2") return null;
+  return user;
+}
+async function rate(key: string) {
+  const { data, error } = await service.rpc("document_recovery_record_attempt", { p_attempt_key: await sha(key), p_success: false });
+  return !error && !!data?.[0]?.allowed;
+}
+async function audit(event_type: string, user_id: string | null = null, request_id: string | null = null, actor_user_id: string | null = null, metadata = {}): Promise<boolean> {
+  const { error } = await service.from("document_recovery_audit").insert({ event_type, user_id, request_id, actor_user_id, metadata });
+  if (error) console.error("recovery audit write failed", { event_type, code: error.code });
+  return !error;
+}
+function validEmail(v: string) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return json({});
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
+  const action = clean(body.action, 40);
+  const ip = clean(req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "unknown", 100).split(",")[0];
+  if (!(await rate("ip:" + ip))) return json({ error: "Too many attempts. Try again later." }, 429);
+
+  if (action === "onboarding_status") {
+    const user = await userFromRequest(req);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    const { data, error } = await service.from("document_recovery_codes")
+      .select("onboarding_completed_at,used_at,expires_at")
+      .eq("user_id", user.id).maybeSingle();
+    if (error) return json({ error: "Could not verify recovery onboarding status." }, 503);
+    const active = !!data && !data.used_at && new Date(data.expires_at).getTime() > Date.now();
+    return json({ needsSetup: !active || !data.onboarding_completed_at });
+  }
+
+  if (action === "ensure_onboarding_code") {
+    const user = await userFromRequest(req);
+    if (!user || !user.email_confirmed_at) return json({ error: "Verify your email and sign in before setting up account recovery." }, 401);
+    const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
+    const code_hash = await sha(code);
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: issued, error } = await service.rpc("document_recovery_begin_onboarding", {
+      p_user_id: user.id, p_code_hash: code_hash, p_expires_at: expiresAt
+    });
+    if (error) {
+      console.error("recovery onboarding issuance failed", { code: error.code });
+      return json({ error: "Recovery Code setup is temporarily unavailable. Please retry." }, 503);
+    }
+    if (!issued) return json({ alreadyConfigured: true });
+    if (!(await audit("recovery_code_onboarding_issued", user.id, null, user.id))) {
+      await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
+      return json({ error: "Audit service unavailable. No Recovery Code was issued; please retry." }, 503);
+    }
+    return json({ issued: true, code, expiresAt, message: "Save this code now. It will not be shown again after you confirm setup." });
+  }
+
+  if (action === "complete_code_onboarding") {
+    const user = await userFromRequest(req);
+    if (!user || !user.email_confirmed_at) return json({ error: "Authentication required" }, 401);
+    const code = clean(body.code, 120).toUpperCase();
+    if (!/^CPR-(?:[A-F0-9]{5}-){7}[A-F0-9]{5}$/.test(code)) return json({ error: "The Recovery Code confirmation is invalid." }, 400);
+    const codeHash = await sha(code);
+    if (!(await audit("recovery_code_onboarding_completed_attempt", user.id, null, user.id))) {
+      return json({ error: "Audit service unavailable. Setup has not been completed." }, 503);
+    }
+    const { data: completed, error } = await service.rpc("document_recovery_complete_onboarding", {
+      p_user_id: user.id, p_code_hash: codeHash
+    });
+    if (error || !completed) return json({ error: "Could not confirm this Recovery Code. Generate a fresh code and try again." }, 409);
+    if (!(await audit("recovery_code_onboarding_completed", user.id, null, user.id))) {
+      // The user may retry confirmation; the state remains completed but the initial attempt is durable.
+      return json({ error: "Setup was saved, but the final audit confirmation failed. Contact support before proceeding." }, 503);
+    }
+    return json({ completed: true });
+  }
+
+  if (action === "issue_code") {
+    const user = await userFromRequest(req);
+    if (!user) return json({ error: "Authentication required" }, 401);
+    const code = "CPR-" + randomToken(20).toUpperCase().match(/.{1,5}/g)!.join("-");
+    const code_hash = await sha(code);
+    const { error } = await service.from("document_recovery_codes").upsert({ user_id: user.id, code_hash, used_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), onboarding_completed_at: new Date().toISOString() });
+    if (error) return json({ error: "Could not create a recovery code. Try again later." }, 500);
+    if (!(await audit("recovery_code_issued", user.id, null, user.id))) {
+      await service.from("document_recovery_codes").delete().eq("user_id", user.id).eq("code_hash", code_hash);
+      return json({ error: "Audit service unavailable. No recovery code was issued; try again later." }, 503);
+    }
+    return json({ code, message: "Save this code securely. It is shown only once; regenerating invalidates the previous code." });
+  }
+
+  if (action === "verify_code") {
+    const code = clean(body.code, 120).toUpperCase();
+    if (!/^CPR-(?:[A-F0-9]{5}-){7}[A-F0-9]{5}$/.test(code) || !(await rate("code:" + await sha(code)))) {
+      return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    }
+    const hash = await sha(code);
+    const ticket = randomToken(32), ticket_hash = await sha(ticket);
+    // The database RPC locks and consumes the code and inserts the ticket in one transaction.
+    // If the request races or the server crashes, no second ticket can be issued from this code.
+    const { data: consumedUserId, error: consumeError } = await service.rpc("document_recovery_consume_code", {
+      p_code_hash: hash,
+      p_ticket_hash: ticket_hash,
+      p_expires_at: new Date(Date.now()+10*60*1000).toISOString()
+    });
+    const userId = typeof consumedUserId === "string" ? consumedUserId : null;
+    if (consumeError || !userId) {
+      if (consumeError) console.error("atomic recovery-code consumption failed", { code: consumeError.code });
+      return json({ message: "If the recovery details are valid, next steps will be provided." }, 200);
+    }
+    if (!(await audit("recovery_code_verified", userId))) {
+      // The code and ticket are already atomically consumed/created. Never return an unaudited ticket.
+      await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString() }).eq("ticket_hash", ticket_hash).is("used_at", null);
+      return json({ error: "Audit service unavailable. Start a new recovery attempt later." }, 503);
+    }
+    return json({ ticket, message: "Code verified. Set a new password now. You can update and verify your email after signing in." });
+  }
+
+  if (action === "submit_request") {
+    const fullName = clean(body.registeredFullName, 120), dob = clean(body.dateOfBirth, 10);
+    const mother = clean(body.motherName, 120), father = clean(body.fatherName, 120), newEmail = clean(body.newEmail, 254).toLowerCase();
+    if (fullName.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(dob) || !validEmail(newEmail)) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
+    // Match registered name and DOB to create an internal candidate only. This is not proof of ownership
+    // and cannot approve the request. The administrator must independently verify ownership and explicitly
+    // supply the target Auth user UUID when approving. Parent names are not stored in the current profile schema.
+    const { data: candidates } = await service.from("document_profiles").select("id").ilike("full_name", fullName).eq("date_of_birth", dob).limit(2);
+    const matchedUser: string | null = candidates?.length === 1 ? candidates[0].id : null;
+    const { error } = await service.from("document_recovery_requests").insert({
+      account_user_id: matchedUser, registered_full_name: fullName, date_of_birth: dob,
+      mother_name: mother || null, father_name: father || null, new_email: newEmail
+    });
+    if (error) return json({ message: "If the request can be accepted, instructions will be provided through the new contact method." });
+    await audit("admin_recovery_request_submitted", matchedUser);
+    return json({ message: "Your request has been received for manual review. For your safety, we cannot confirm account matches here. Do not submit identity documents unless an administrator asks through an official channel." });
+  }
+
+  if (action === "complete_recovery") {
+    const ticket = clean(body.ticket, 128), password = typeof body.password === "string" ? body.password : "";
+    if (ticket.length < 40 || password.length < 12 || password.length > 128) return json({ error: "Use a password of at least 12 characters and a valid recovery session." }, 400);
+    const hash = await sha(ticket);
+    const { data: t } = await service.from("document_recovery_tickets").select("ticket_hash,user_id,recovery_request_id,expires_at,used_at").eq("ticket_hash",hash).maybeSingle();
+    if (!t || t.used_at || new Date(t.expires_at).getTime() < Date.now()) return json({ error: "Recovery session expired or invalid. Start again." }, 400);
+    const now = new Date().toISOString();
+    const { data: claimed } = await service.from("document_recovery_tickets").update({ processing_at: now }).eq("ticket_hash",hash).is("used_at",null).is("processing_at",null).gt("expires_at",now).select("user_id,recovery_request_id");
+    if (!claimed?.length) return json({ error: "Recovery session expired, invalid, or already in use. If a server interruption occurred, contact support rather than retrying this ticket." }, 400);
+    const { error } = await service.auth.admin.updateUserById(t.user_id, { password });
+    if (error) {
+      // Auth/network errors can be ambiguous: the Auth service may have applied the password
+      // update before the response was lost. Never release the ticket for replay on an
+      // ambiguous result. Keep processing_at set and require administrator reconciliation
+      // and a newly verified recovery ticket if necessary.
+      await audit("recovery_password_update_outcome_uncertain",t.user_id,t.recovery_request_id,null,{ auth_error_code: error.status || "unknown" });
+      return json({ error: "The password update result could not be confirmed. For your security this ticket is locked against replay; contact support for a fresh verified recovery." }, 503);
+    }
+    const { error: finalizeError } = await service.from("document_recovery_tickets").update({ used_at: new Date().toISOString(), processing_at: null }).eq("ticket_hash",hash).is("used_at",null).not("processing_at","is",null);
+    if (finalizeError) {
+      console.error("ticket finalize failed after password update", { code: finalizeError.code });
+      return json({ error: "Password update succeeded but recovery finalization needs administrator attention. Do not retry this ticket." }, 500);
+    }
+    if (t.recovery_request_id) {
+      await service.from("document_recovery_requests").update({ completed_at: new Date().toISOString() }).eq("id",t.recovery_request_id).eq("status","approved");
+    }
+    await audit("recovery_password_updated",t.user_id,t.recovery_request_id);
+    return json({ message: "Password updated. Sign in with your account email, then change your email in account settings and complete Supabase's email verification before using the new address." });
+  }
+
+  if (action === "admin_list" || action === "admin_decide" || action === "admin_reconcile_list" || action === "admin_reconcile_ticket") {
+    const user = await requireAdminMfa(req);
+    if (!user) return json({ error: "Not authorized. A verified allowlisted administrator with an AAL2 session is required." }, 403);
+    if (action === "admin_list") {
+      const { data, error } = await service.from("document_recovery_requests").select("id,registered_full_name,date_of_birth,mother_name,father_name,new_email,status,created_at,expires_at").eq("status","pending").order("created_at",{ascending:true}).limit(100);
+      if (error) return json({ error: "Unable to load requests" }, 500);
+      if (!(await audit("admin_recovery_list_viewed", null, null, user.id, { count: data?.length || 0 }))) {
+        return json({ error: "Audit service unavailable. No recovery data was returned; try again later." }, 503);
+      }
+      return json({ requests: data || [] });
+    }
+    if (action === "admin_reconcile_list") {
+      const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data, error } = await service.from("document_recovery_tickets")
+        .select("ticket_hash,user_id,recovery_request_id,processing_at,created_at,expires_at")
+        .not("processing_at","is",null).is("used_at",null).lt("processing_at",cutoff)
+        .order("processing_at",{ascending:true}).limit(100);
+      if (error) return json({ error: "Unable to load interrupted recovery operations." },500);
+      if (!(await audit("admin_recovery_reconciliation_list_viewed",null,null,user.id,{ count:data?.length || 0 }))) {
+        return json({ error: "Audit service unavailable. No reconciliation data was returned." },503);
+      }
+      return json({ interrupted: data || [] });
+    }
+    if (action === "admin_reconcile_ticket") {
+      const ticketHash = clean(body.ticketHash,64).toLowerCase();
+      const outcome = clean(body.outcome,40);
+      const rationale = clean(body.rationale,500);
+      if (!/^[a-f0-9]{64}$/.test(ticketHash) || !["password_changed_confirmed","password_not_changed_confirmed","outcome_unknown"].includes(outcome) || rationale.length < 10) {
+        return json({ error: "A valid ticket hash, reconciliation outcome and rationale of at least 10 characters are required." },400);
+      }
+      if (!(await audit("admin_recovery_reconciliation_attempt",null,null,user.id,{ outcome }))) {
+        return json({ error: "Audit service unavailable. No reconciliation was recorded." },503);
+      }
+      const { data: ticket, error: ticketError } = await service.from("document_recovery_tickets")
+        .select("ticket_hash,user_id,recovery_request_id,processing_at,used_at")
+        .eq("ticket_hash",ticketHash).maybeSingle();
+      if (ticketError || !ticket || !ticket.processing_at || ticket.used_at ||
+          new Date(ticket.processing_at).getTime() > Date.now() - 5 * 60 * 1000) {
+        return json({ error: "Ticket is not in a reconcilable interrupted state; only operations stuck for at least five minutes can be reviewed." },409);
+      }
+      const { error: recordError } = await service.from("document_recovery_reconciliation").insert({
+        ticket_hash:ticketHash,actor_user_id:user.id,outcome,rationale
+      });
+      if (recordError) return json({ error: recordError.code === "23505" ? "This ticket has already been reconciled." : "Reconciliation could not be recorded." },409);
+      // Never clear processing_at or reopen this ticket, even when an administrator believes
+      // the password was not changed. A fresh, independently verified recovery must be started.
+      const { error: auditError } = await service.from("document_recovery_audit").insert({
+        event_type:"admin_recovery_reconciled",user_id:ticket.user_id,request_id:ticket.recovery_request_id,
+        actor_user_id:user.id,metadata:{ outcome, ticket_hash_prefix:ticketHash.slice(0,12) }
+      });
+      if (auditError) {
+        console.error("reconciliation outcome audit failed",{code:auditError.code});
+        return json({ error:"Reconciliation record exists but audit finalization failed. Ticket remains locked; administrator follow-up is required." },503);
+      }
+      return json({ message:"Reconciliation recorded. This ticket remains permanently locked; start a fresh verified recovery if another attempt is required." });
+    }
+    const id = clean(body.requestId, 50), decision = clean(body.decision, 20), notes = clean(body.reviewNotes, 500), verifiedUserId = clean(body.verifiedUserId, 50);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !["approved","rejected"].includes(decision) || notes.length < 10) return json({ error: "A valid request, decision and review notes are required." },400);
+    // Durably audit the attempt first. The database RPC then locks the pending request,
+    // inserts the ticket, records the decision and writes outcome audit rows atomically.
+    if (!(await audit("admin_recovery_decision_attempt", null, id, user.id, { decision }))) {
+      return json({ error: "Audit service unavailable. No decision was applied; try again later." }, 503);
+    }
+    let approvedTicket: string | null = null;
+    let ticketHash: string | null = null;
+    let ticketExpiresAt: string | null = null;
+    if (decision === "approved") {
+      if (!/^[0-9a-f-]{36}$/i.test(verifiedUserId)) return json({ error: "An independently verified account is required." },400);
+      const { data: authTarget, error: targetError } = await service.auth.admin.getUserById(verifiedUserId);
+      if (targetError || !authTarget?.user) return json({ error: "The verified account could not be found." },400);
+      approvedTicket = randomToken(32);
+      ticketHash = await sha(approvedTicket);
+      ticketExpiresAt = new Date(Date.now()+24*60*60*1000).toISOString();
+    }
+    const { data: decisionRows, error: decisionError } = await service.rpc("document_recovery_admin_decide", {
+      p_request_id: id,
+      p_decision: decision,
+      p_verified_user_id: decision === "approved" ? verifiedUserId : null,
+      p_actor_user_id: user.id,
+      p_review_notes: notes,
+      p_ticket_hash: ticketHash,
+      p_ticket_expires_at: ticketExpiresAt
+    });
+    if (decisionError || !decisionRows?.length) {
+      console.error("atomic admin recovery decision failed", { code: decisionError?.code || "no_result" });
+      return json({ error: decisionError?.code === "40001" ? "Request was already reviewed or expired." : "Decision was not applied. Check the request state and audit service before retrying." }, decisionError?.code === "40001" ? 409 : 503);
+    }
+    // The plaintext ticket exists only in this response. Its hash, decision and audit
+    // events were committed together; if any database write failed, the transaction rolled back.
+    return json(decision === "approved"
+      ? { message: "Approved. Deliver the one-time ticket only through an independently verified channel. It expires in 24 hours.", ticket: approvedTicket }
+      : { message: "Request rejected. The claimant receives no recovery ticket." });
+  }
+  return json({ error: "Unknown action" }, 400);
+});
