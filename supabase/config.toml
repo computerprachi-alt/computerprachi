@@ -1,0 +1,4 @@
+[functions.document-locker-recovery]
+# The function supports public recovery-code/request actions and validates authenticated actions internally.
+# Do not rely on gateway JWT validation alone; the handler verifies bearer tokens for protected actions.
+verify_jwt = false
