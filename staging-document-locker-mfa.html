@@ -466,7 +466,12 @@ $('removeAbandonedFactorBtn').addEventListener('click',async()=>{
        byId[0]?.factor_type!=='totp' || byId[0]?.status!=='unverified' ||
        (byId[0]?.friendly_name||'').trim()!=='Computer Prachi Staging Admin')
       throw new Error('Exact target factor validation failed. No factor was removed.');
-    // Last project identity check before the mutation call.
+    // Recheck identity and assurance after the factor-list round trip, immediately
+    // before the mutation call. Any session change closes the gate.
+    const {session:finalSession,user:finalUser}=await getFreshVerifiedIdentity();
+    if(finalSession.user.id!==session.user.id || finalUser.id!==user.id)
+      throw new Error('Authenticated identity changed during revalidation. No factor was removed.');
+    await freshAal2Required();
     if(!projectIdentityIsStaging()) throw new Error('Staging URL/ref mismatch. No factor was removed.');
     button.textContent='Removing exact factor…';
     const {error:removeError}=await client.auth.mfa.unenroll({factorId:targetId});
