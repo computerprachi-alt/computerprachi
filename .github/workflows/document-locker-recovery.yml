@@ -1,0 +1,30 @@
+name: Document Locker Recovery Checks
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/document-locker-recovery/**"
+      - "tests/document-locker-recovery-regression.test.mjs"
+      - "document-locker-login.html"
+      - "document-locker-dashboard.html"
+      - "document-locker-recovery.html"
+      - "document-locker-recovery-settings.html"
+      - "supabase/migrations/*document_locker_account_recovery.sql"
+      - ".github/workflows/document-locker-recovery.yml"
+      - ".github/workflows/document-locker-recovery-staging.yml"
+      - "supabase/ACCOUNT_RECOVERY_SETUP.md"
+permissions:
+  contents: read
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check recovery Edge Function and tests (no secrets)
+        run: deno check supabase/functions/document-locker-recovery/index.ts supabase/functions/document-locker-recovery/index.test.ts
+      - name: Run source-level regression tests (no secrets)
+        run: node --test tests/document-locker-recovery-regression.test.mjs

@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Staging Admin MFA | Computer Prachi</title>
+<style>
+:root{--navy:#07145c;--red:#b42318;--green:#176534;--bg:#f3f6fb;--border:#d8dfeb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:#202938}
+.wrap{max-width:720px;margin:30px auto;padding:0 14px}.card{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 5px 22px #173b7a12}
+header{background:var(--navy);color:#fff;padding:22px;text-align:center}header strong{font-size:22px}
+main{padding:24px}.warning{border:1px solid #e6bd58;background:#fff8e7;color:#654b0b;border-radius:8px;padding:13px;line-height:1.5;margin-bottom:18px}
+.project{font:12px monospace;overflow-wrap:anywhere;color:#34415c;background:#f4f7fb;padding:10px;border-radius:6px;margin:10px 0 18px}
+label{display:block;font-weight:700;margin:13px 0 6px;color:#25365f}input{width:100%;height:44px;border:1px solid #c9d2e2;border-radius:6px;padding:0 11px;font:inherit}
+button{min-height:43px;border:0;border-radius:6px;padding:10px 15px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer;margin:10px 8px 0 0}
+button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cursor:wait}
+.panel{border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:18px}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7fb;padding:12px;border-radius:7px;line-height:1.5;margin-top:16px}
+.status.ok{background:#edf8f0;color:#14532d}.status.err{background:#fff0ef;color:#8a1c13}
+#qr{display:block;max-width:220px;width:100%;height:auto;margin:14px auto;border:8px solid #fff;outline:1px solid var(--border)}
+.secret{font:700 15px monospace;overflow-wrap:anywhere;background:#f4f7fb;padding:12px;border-radius:6px;user-select:all}
+.small{font-size:13px;line-height:1.5;color:#59677e}
+[hidden]{display:none!important}
+@media(max-width:600px){.wrap{margin:0;padding:0}.card{border-radius:0;min-height:100vh}main{padding:17px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div class="wrap"><div class="card">
+<header><strong>COMPUTER PRACHI — STAGING MFA</strong><div>Administrator authentication test</div></header>
+<main>
+<div class="warning"><strong>STAGING ONLY.</strong> This page is hard-wired to the isolated staging Supabase project. Do not enter production credentials. It is a test utility, not the public Document Locker login page.</div>
+<div class="project">Project: sxmfaielpdbiwxfwxbap<br>URL: https://sxmfaielpdbiwxfwxbap.supabase.co</div>
+<section id="loginPanel">
+<h2>Staging administrator sign in</h2>
+<form id="loginForm">
+<label for="email">Staging administrator email</label><input id="email" type="email" autocomplete="username" required>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button id="loginBtn" type="submit">Sign in to staging</button>
+</form>
+</section>
+<section id="authPanel" class="panel" hidden>
+<h2>Multi-factor authentication</h2>
+<p id="account" class="small"></p>
+<p id="aal" class="status">Checking authentication assurance…</p>
+<p id="factorDiagnostics" class="status small" aria-live="polite">Waiting for authenticated factor diagnostics…</p>
+<button id="removeAbandonedFactorBtn" class="secondary" type="button" hidden>Remove exact abandoned unverified staging factor</button>
+<p id="removeFactorNote" class="small" hidden>This action rechecks the signed-in identity and exact factor metadata immediately before calling Supabase Auth. It will not remove any other factor.</p>
+<div id="enrollPanel" hidden>
+<h3>Enroll Authenticator App (TOTP)</h3>
+<p class="small">Scan this QR code using your authenticator app. The setup key is intentionally not printed or logged by this diagnostic page. Do not share the QR code.</p>
+<img id="qr" alt="Staging TOTP enrollment QR code" hidden>
+<p id="secret" class="secret" hidden></p>
+<form id="enrollVerifyForm">
+<label for="enrollCode">6-digit authenticator code</label><input id="enrollCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+<button id="enrollVerifyBtn" type="submit">Verify and activate TOTP</button>
+</form>
+</div>
+<div id="challengePanel" hidden>
+<h3>Verify existing Authenticator App</h3>
+<label for="verifiedFactorSelect">Choose a verified TOTP factor</label>
+<select id="verifiedFactorSelect" required></select>
+<button id="selectVerifiedFactorBtn" class="secondary" type="button">Use selected factor</button>
+<form id="challengeForm">
+<label for="challengeCode">6-digit authenticator code</label><input id="challengeCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+<button id="challengeBtn" type="submit">Verify TOTP and check AAL2</button>
+</form>
+</div>
+<button id="startEnrollmentBtn" class="secondary" type="button" hidden>Start new TOTP enrollment</button>
+<button id="refreshBtn" class="secondary" type="button">Refresh AAL status</button>
+<button id="logoutBtn" class="secondary" type="button">Sign out</button>
+</section>
+<div id="message" class="status" role="status" aria-live="polite">Loading secure staging sign-in…</div>
+<p class="small">This page uses only Supabase Auth client APIs. The server-side recovery function independently checks the administrator allowlist and AAL2; a successful sign-in here does not grant admin approval privileges by itself.</p>
+</main></div></div>
+<script>
+(function(){
+'use strict';
+const SUPABASE_URL='https://sxmfaielpdbiwxfwxbap.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_td88QLYIBDJUglzEvnNKjQ_ewl2VJzk';
+const PROJECT_REF='sxmfaielpdbiwxfwxbap';
+const $=id=>document.getElementById(id);
+const message=$('message');
+let client=null;
+let enrollmentFactorId=null;
+let enrollmentChallengeId=null;
+let challengeFactorId=null;
+let challengeId=null;
+let checkingMfa=false;
+let qrRenderFailed=false;
+
+function projectIdentityIsStaging(){
+  try{
+    const parsed=new URL(SUPABASE_URL);
+    return PROJECT_REF==='sxmfaielpdbiwxfwxbap' &&
+      parsed.protocol==='https:' &&
+      parsed.hostname==='sxmfaielpdbiwxfwxbap.supabase.co' &&
+      parsed.origin==='https://'+PROJECT_REF+'.supabase.co';
+  }catch(_){return false;}
+}
+function factorMetadata(f){
+  return JSON.stringify({
+    id:f?.id||null,
+    factor_type:f?.factor_type||null,
+    status:f?.status||null,
+    friendly_name:f?.friendly_name||null,
+    created_at:f?.created_at||null,
+    updated_at:f?.updated_at||null
+  });
+}
+function validateFactorSnapshot(factors){
+  if(!factors || !Array.isArray(factors.all)) throw new Error('Fresh factor response is missing complete all[].');
+  const typedEntries=Object.entries(factors).filter(([key,value])=>key!=='all' && Array.isArray(value));
+  if(!typedEntries.length) throw new Error('Fresh factor response has no typed factor groups.');
+  const all=factors.all;
+  const typed=typedEntries.flatMap(([type,items])=>items.map(f=>({type,f})));
+  const idsAll=all.map(f=>f?.id);
+  const idsTyped=typed.map(x=>x.f?.id);
+  if(idsAll.some(id=>!id) || idsTyped.some(id=>!id)) throw new Error('Factor list contains an item without an ID.');
+  if(new Set(idsAll).size!==idsAll.length || new Set(idsTyped).size!==idsTyped.length)
+    throw new Error('Duplicate factor IDs detected in aggregate or typed groups.');
+  if(idsAll.length!==idsTyped.length || idsAll.some(id=>!idsTyped.includes(id)) || idsTyped.some(id=>!idsAll.includes(id)))
+    throw new Error('Aggregate all[] and typed factor groups do not contain the same IDs.');
+  for(const item of typed){
+    if(!item.f.factor_type || item.f.factor_type!==item.type)
+      throw new Error('Typed factor group metadata does not match factor_type.');
+    const aggregate=all.find(f=>f.id===item.f.id);
+    if(!aggregate || factorMetadata(aggregate)!==factorMetadata(item.f))
+      throw new Error('Aggregate and typed factor metadata differ for ID '+item.f.id+'.');
+  }
+  return {all,typedEntries,typed};
+}
+async function getFreshVerifiedIdentity(){
+  if(!projectIdentityIsStaging()) throw new Error('Staging URL/ref mismatch. Operation blocked.');
+  const {data:sessionData,error:sessionError}=await client.auth.getSession();
+  if(sessionError) throw sessionError;
+  const session=sessionData?.session;
+  const sessionUserId=session?.user?.id;
+  if(!sessionUserId || !session?.access_token) throw new Error('Fresh authenticated staging session is unavailable.');
+  const {data:userData,error:userError}=await client.auth.getUser(session.access_token);
+  if(userError) throw userError;
+  const user=userData?.user;
+  if(!user || user.id!==sessionUserId) throw new Error('Fresh session user ID does not match Auth user ID.');
+  if(String(user.email||'').trim().toLowerCase()!=='computerprachi@gmail.com' || !user.email_confirmed_at)
+    throw new Error('Expected administrator email is not verified. Operation blocked.');
+  return {session,user};
+}
+async function freshAal2Required(){
+  const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(error) throw error;
+  if(data?.currentLevel!=='aal2') throw new Error('Current session is not AAL2. Operation blocked.');
+  return data;
+}
+
+function show(text,kind=''){
+  message.hidden=false;
+  message.className='status'+(kind?' '+kind:'');
+  message.textContent=text;
+}
+function setBusy(id,busy,label){
+  const b=$(id);b.disabled=busy;if(label)b.textContent=busy?'Please wait…':label;
+}
+function hideMfaPanels(){
+  $('enrollPanel').hidden=true;$('challengePanel').hidden=true;
+  $('qr').hidden=true;$('secret').hidden=true;
+}
+async function checkAal(){
+  if(checkingMfa)return;
+  checkingMfa=true;
+  setBusy('refreshBtn',true,'Refresh AAL and MFA factors');
+  try{
+    $('startEnrollmentBtn').hidden=true;
+    if(!projectIdentityIsStaging()) throw new Error('Staging URL/ref mismatch. MFA diagnostics are blocked.');
+    const {session:sessionData,user:userData}=await getFreshVerifiedIdentity();
+    const sessionUserId=sessionData.user.id;
+    const authUserId=userData.id;
+    if(!authUserId || authUserId!==sessionUserId){
+      $('factorDiagnostics').textContent='IDENTITY CHECK: FAILED. Session user and Auth server user do not match.';
+      throw new Error('Staging identity mismatch. Sign out and sign in again. MFA enrollment was blocked.');
+    }
+    $('factorDiagnostics').textContent='IDENTITY CHECK: PASS. Session user matches Auth server user.\\nChecking all Auth factor types…';
+
+    // listFactors() returns all plus type-specific groups. Preserve every array
+    // returned by the installed SDK and compare the aggregate against its groups.
+    const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
+    if(factorError)throw factorError;
+    if(!factors || typeof factors!=='object')throw new Error('Auth factor check returned no usable data. Enrollment was blocked.');
+    const snapshot=validateFactorSnapshot(factors);
+    const returnedGroups=snapshot.typedEntries;
+    const allAvailable=true;
+    const all=snapshot.all;
+    const grouped=snapshot.typed.map(x=>x.f);
+    const everyFactor=all;
+    const totp=Array.isArray(factors.totp)?factors.totp:[];
+    const phone=Array.isArray(factors.phone)?factors.phone:[];
+    const verified=totp.filter(f=>f.status==='verified');
+    const unverified=totp.filter(f=>f.status==='unverified');
+    const exactName='Computer Prachi Staging Admin';
+    const nameMatches=everyFactor.filter(f=>(f.friendly_name||'').trim()===exactName);
+    const allIds=new Set(all.map(f=>f?.id).filter(Boolean));
+    const groupIds=new Set(grouped.map(f=>f?.id).filter(Boolean));
+    const groupsConsistent=allAvailable && allIds.size===groupIds.size && [...allIds].every(id=>groupIds.has(id));
+    const typeSummary=returnedGroups.map(([type,items])=>type+': '+items.length).join(', ')||'No typed factor arrays returned';
+    // Show only non-secret metadata for the exact friendly-name match.
+    // Factor IDs are identifiers, not credentials; never render session tokens,
+    // QR payloads, or TOTP setup secrets in this diagnostic.
+    const matchSummary=nameMatches.length
+      ? nameMatches.map(f=>'ID: '+String(f.id||'unavailable')+
+          ' | type: '+String(f.factor_type||'unknown')+
+          ' | status: '+String(f.status||'unknown')+
+          ' | friendly name: '+String(f.friendly_name||'')).join('\\n')
+      : 'none';
+    const authenticatedEmail=String(userData?.user?.email||'').trim().toLowerCase();
+    const emailMatches=authenticatedEmail==='computerprachi@gmail.com';
+    $('factorDiagnostics').textContent=
+      'IDENTITY CHECK: '+(emailMatches?'PASS':'FAIL')+'\\n'+
+      'AUTH USER: '+(authenticatedEmail||'unavailable')+'\\n'+
+      'PROJECT: '+PROJECT_REF+'\\n'+
+      'FACTOR GROUPS: '+typeSummary+'\\n'+
+      'AGGREGATE all[]: '+(allAvailable?'available ('+all.length+')':'MISSING')+'\\n'+
+      'DEDUPED FACTORS: '+everyFactor.length+'\\n'+
+      'GROUP CONSISTENCY: '+(groupsConsistent?'PASS':'FAIL')+'\\n'+
+      'EXACT FRIENDLY-NAME MATCHES: '+nameMatches.length+'\\n'+matchSummary;
+    // Show removal only for the exact target from a fresh aggregate factor list.
+    const targetId='ac27fe1f-f97d-4ae4-a47c-6eab3235c20f';
+    const targetInAll=all.filter(f=>f?.id===targetId);
+    const allNameMatches=all.filter(f=>(f?.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    const targetFactor=targetInAll.length===1?targetInAll[0]:null;
+    const targetReady=emailMatches && PROJECT_REF==='sxmfaielpdbiwxfwxbap' &&
+      targetInAll.length===1 && allNameMatches.length===1 &&
+      targetFactor?.factor_type==='totp' && targetFactor?.status==='unverified' &&
+      (targetFactor?.friendly_name||'').trim()==='Computer Prachi Staging Admin';
+    $('removeAbandonedFactorBtn').hidden=!targetReady;
+    $('removeFactorNote').hidden=!targetReady;
+    if(targetReady){
+      hideMfaPanels();
+      show('Exact abandoned staging factor identified. Review the Factor ID and status above, then click the removal button to run a second fresh check and remove only this factor.');
+      return;
+    }
+    if(!groupsConsistent){
+      hideMfaPanels();
+      throw new Error('Auth factor data is incomplete or inconsistent. Enrollment was blocked. Read the factor diagnostics and do not retry until the mismatch is resolved.');
+    }
+
+    const {data:aalData,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(aalError)throw aalError;
+    const current=aalData.currentLevel||'aal1';
+    const next=aalData.nextLevel||current;
+    $('aal').textContent='Current session: '+current+'\nNext required level: '+next+
+      '\nFresh Auth factor check: '+verified.length+' verified, '+unverified.length+' unverified TOTP factor(s).';
+    $('aal').className='status'+(current==='aal2'?' ok':'');
+
+    if(current==='aal2'){
+      hideMfaPanels();
+      show('AAL2 VERIFIED. This staging session has completed a second factor.','ok');
+      return;
+    }
+    if(nameMatches.length){
+      hideMfaPanels();
+      show('ENROLLMENT BLOCKED: friendly-name conflict is visible in the factor diagnostics. Matching factor type/status: '+
+        nameMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')).join(', ')+
+        '. No new factor was created.','err');
+      return;
+    }
+    if(verified.length){
+      challengeFactorId=null;challengeId=null;
+      enrollmentFactorId=null;enrollmentChallengeId=null;
+      $('enrollPanel').hidden=true;$('challengePanel').hidden=false;
+      $('qr').hidden=true;$('secret').hidden=true;
+      const selector=$('verifiedFactorSelect');
+      selector.replaceChildren();
+      for(const factor of verified){
+        const option=document.createElement('option');
+        option.value=factor.id;
+        option.textContent=(factor.friendly_name||'Authenticator')+' — '+factor.id;
+        selector.appendChild(option);
+      }
+      $('challengeForm').hidden=true;
+      show(verified.length>1
+        ? 'Multiple verified TOTP factors are available. Select the factor you want to use; none is selected automatically.'
+        : 'Select the verified TOTP factor and confirm before starting a challenge.');
+      return;
+    }
+    if(unverified.length){
+      const samePageEnrollment=unverified.find(f=>f.id===enrollmentFactorId);
+      $('challengePanel').hidden=true;
+      if(samePageEnrollment && $('qr').getAttribute('src')){
+        if(!enrollmentChallengeId){
+          const {data:retryChallenge,error:retryChallengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+          if(retryChallengeError)throw retryChallengeError;
+          enrollmentChallengeId=retryChallenge.id;
+        }
+        $('enrollPanel').hidden=false;
+        show('Fresh factor check confirms this page’s unverified enrollment. Scan the QR code below and verify it; no duplicate enrollment was created.');
+      }else{
+        hideMfaPanels();
+        show('Supabase reports '+unverified.length+' unverified TOTP factor(s), but this page does not have their original QR secret. Do not enroll again. Remove the abandoned factor in the STAGING project, then sign out and sign in again.');
+      }
+      return;
+    }
+
+    // An empty factor list is diagnostic information only. It never
+    // authorizes an Auth mutation from login, refresh, or checkAal().
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
+    hideMfaPanels();
+    $('qr').removeAttribute('src');$('secret').textContent='';
+    qrRenderFailed=false;
+    $('startEnrollmentBtn').hidden=false;
+    show('No TOTP factor was returned by the fresh Auth check. Enrollment is available only through the separate explicit button.');
+    return;
+  }catch(error){
+    hideMfaPanels();
+    show(error?.message||'Staging MFA check failed. No QR enrollment panel is being shown.','err');
+  }finally{
+    checkingMfa=false;
+    setBusy('refreshBtn',false,'Refresh AAL and MFA factors');
+  }
+}
+async function startEnrollment(){
+  const button=$('startEnrollmentBtn');
+  if(button.disabled || checkingMfa)return;
+  button.disabled=true;
+  const originalLabel=button.textContent;
+  button.textContent='Rechecking security before enrollment…';
+  $('startEnrollmentBtn').hidden=true;
+  try{
+    if(!projectIdentityIsStaging())
+      throw new Error('Staging URL/ref mismatch. Enrollment blocked.');
+    const {session,user}=await getFreshVerifiedIdentity();
+    if(!session?.user?.id || session.user.id!==user.id)
+      throw new Error('Fresh session user ID and Auth user ID do not match.');
+    const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
+    if(factorError)throw factorError;
+    const snapshot=validateFactorSnapshot(factors);
+    if(snapshot.all.length!==0)
+      throw new Error('One or more Auth factors already exist. New enrollment is blocked; refresh diagnostics.');
+    const {data:aalData,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(aalError)throw aalError;
+    if(aalData?.currentLevel!=='aal1')
+      throw new Error('Current AAL must be aal1 before explicit enrollment.');
+    if(!projectIdentityIsStaging())
+      throw new Error('Staging URL/ref mismatch on final check. Enrollment blocked.');
+    const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
+      factorType:'totp',
+      friendlyName:'Computer Prachi Staging Admin'
+    });
+    if(enrollError)throw enrollError;
+    if(!enrollment?.id || !enrollment?.totp?.qr_code || !enrollment?.totp?.secret)
+      throw new Error('Explicit enrollment returned incomplete factor/QR/secret data. Do not retry automatically.');
+    enrollmentFactorId=enrollment.id;
+    enrollmentChallengeId=null;
+    challengeFactorId=null;challengeId=null;
+    $('enrollPanel').hidden=false;
+    $('challengePanel').hidden=true;
+    const qrSvg=String(enrollment.totp.qr_code).trim();
+    $('qr').onerror=()=>{
+      qrRenderFailed=true;$('qr').hidden=true;
+      show('TOTP enrollment succeeded, but the QR image could not be rendered. Do not retry automatically.','err');
+    };
+    $('qr').onload=()=>{qrRenderFailed=false;};
+    $('qr').src=qrSvg.startsWith('data:image/')
+      ? qrSvg
+      : 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qrSvg);
+    $('qr').hidden=false;
+    $('secret').textContent='';
+    $('secret').hidden=true;
+    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+    if(challengeError)throw new Error('Enrollment succeeded, but challenge creation failed: '+challengeError.message+'. Do not enroll again.');
+    enrollmentChallengeId=challenge.id;
+    show('Explicit TOTP enrollment succeeded. Scan the QR code and verify it using the enrollment form.');
+  }catch(error){
+    hideMfaPanels();
+    $('qr').removeAttribute('src');$('secret').textContent='';
+    show(error?.message||'Explicit TOTP enrollment failed. No automatic retry was attempted.','err');
+  }finally{
+    button.disabled=false;
+    button.textContent=originalLabel;
+  }
+}
+async function verifyAal2(){
+  const {data,error}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(error)throw error;
+  $('aal').textContent='Current session: '+(data.currentLevel||'unknown')+'\nNext required level: '+(data.nextLevel||'unknown');
+  $('aal').className='status'+(data.currentLevel==='aal2'?' ok':'');
+  if(data.currentLevel!=='aal2')throw new Error('The Authenticator code was accepted but this session is not yet AAL2. Refresh the session and check again.');
+  hideMfaPanels();
+  show('SUCCESS: STAGING ADMIN SESSION IS AAL2. The second factor was verified by Supabase Auth.','ok');
+}
+$('loginForm').addEventListener('submit',async event=>{
+  event.preventDefault();setBusy('loginBtn',true,'Sign in to staging');
+  try{
+    // Clear only this utility's local session before password sign-in.
+    const {error:clearError}=await client.auth.signOut({scope:'local'});
+    if(clearError)throw clearError;
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
+    const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    if(error)throw error;
+    if(!data.session)throw new Error('No staging session was created.');
+    $('loginPanel').hidden=true;$('authPanel').hidden=false;
+    $('account').textContent='Signed in as: '+(data.user.email||'staging user')+' — project '+PROJECT_REF;
+    await checkAal();
+  }catch(error){show(error.message||'Staging sign-in failed.');}
+  finally{setBusy('loginBtn',false,'Sign in to staging');$('password').value='';}
+});
+$('selectVerifiedFactorBtn').addEventListener('click',async()=>{
+  const selectedId=$('verifiedFactorSelect').value;
+  const button=$('selectVerifiedFactorBtn');
+  button.disabled=true;
+  try{
+    if(!selectedId) throw new Error('Select a verified TOTP factor first.');
+    const {user}=await getFreshVerifiedIdentity();
+    const {data:fresh,error}=await client.auth.mfa.listFactors();
+    if(error) throw error;
+    const snapshot=validateFactorSnapshot(fresh);
+    const matches=snapshot.all.filter(f=>f.id===selectedId && f.factor_type==='totp' && f.status==='verified');
+    if(matches.length!==1) throw new Error('Selected factor is no longer uniquely verified. Refresh and select again.');
+    const {data:aal,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(aalError) throw aalError;
+    if(aal?.currentLevel==='aal2') throw new Error('Session is already AAL2; refresh status instead.');
+    challengeFactorId=matches[0].id;
+    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:challengeFactorId});
+    if(challengeError) throw challengeError;
+    challengeId=challenge.id;
+    $('challengeForm').hidden=false;
+    show('Selected verified factor was revalidated against a fresh Auth factor list. Enter its current code to verify AAL2.');
+  }catch(error){challengeFactorId=null;challengeId=null;show(error?.message||'Factor selection validation failed.','err');}
+  finally{button.disabled=false;}
+});
+$('startEnrollmentBtn').addEventListener('click',startEnrollment);
+$('enrollVerifyForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const code=$('enrollCode').value.trim();
+  if(!/^\d{6}$/.test(code)){show('Enter the six-digit code from your authenticator app.','err');return;}
+  setBusy('enrollVerifyBtn',true,'Verify and activate TOTP');
+  try{
+    if(!enrollmentChallengeId){
+      const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+      if(challengeError)throw challengeError;
+      enrollmentChallengeId=challenge.id;
+    }
+    const {error}=await client.auth.mfa.verify({factorId:enrollmentFactorId,challengeId:enrollmentChallengeId,code});
+    if(error)throw error;
+    $('enrollCode').value='';
+    await verifyAal2();
+  }catch(error){show(error.message||'TOTP enrollment verification failed.','err');}
+  finally{setBusy('enrollVerifyBtn',false,'Verify and activate TOTP');}
+});
+$('challengeForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const code=$('challengeCode').value.trim();
+  if(!/^\d{6}$/.test(code)){show('Enter the six-digit code from your authenticator app.','err');return;}
+  setBusy('challengeBtn',true,'Verify TOTP and check AAL2');
+  try{
+    const {error}=await client.auth.mfa.verify({factorId:challengeFactorId,challengeId,code});
+    if(error)throw error;
+    $('challengeCode').value='';
+    await verifyAal2();
+  }catch(error){show(error.message||'TOTP challenge failed.','err');}
+  finally{setBusy('challengeBtn',false,'Verify TOTP and check AAL2');}
+});
+$('removeAbandonedFactorBtn').addEventListener('click',async()=>{
+  const button=$('removeAbandonedFactorBtn');
+  button.disabled=true;
+  const originalLabel=button.textContent;
+  button.textContent='Rechecking all security checks…';
+  try{
+    // Revalidate every prerequisite immediately before the only unenroll call.
+    const {session,user}=await getFreshVerifiedIdentity();
+    if(user.id!==session.user.id) throw new Error('Fresh session/Auth user ID mismatch.');
+    await freshAal2Required();
+    const {data:fresh,error:freshError}=await client.auth.mfa.listFactors();
+    if(freshError) throw freshError;
+    const snapshot=validateFactorSnapshot(fresh);
+    const targetId='ac27fe1f-f97d-4ae4-a47c-6eab3235c20f';
+    const byId=snapshot.all.filter(f=>f.id===targetId);
+    const byName=snapshot.all.filter(f=>(f.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    if(byId.length!==1 || byName.length!==1 || byId[0]?.id!==byName[0]?.id ||
+       byId[0]?.factor_type!=='totp' || byId[0]?.status!=='unverified' ||
+       (byId[0]?.friendly_name||'').trim()!=='Computer Prachi Staging Admin')
+      throw new Error('Exact target factor validation failed. No factor was removed.');
+    // Recheck identity and assurance after the factor-list round trip, immediately
+    // before the mutation call. Any session change closes the gate.
+    const {session:finalSession,user:finalUser}=await getFreshVerifiedIdentity();
+    if(finalSession.user.id!==session.user.id || finalUser.id!==user.id)
+      throw new Error('Authenticated identity changed during revalidation. No factor was removed.');
+    await freshAal2Required();
+    if(!projectIdentityIsStaging()) throw new Error('Staging URL/ref mismatch. No factor was removed.');
+    button.textContent='Removing exact factor…';
+    const {error:removeError}=await client.auth.mfa.unenroll({factorId:targetId});
+    if(removeError) throw removeError;
+
+    // Verify once only. Never automatically retry an ambiguous result.
+    const {data:after,error:afterError}=await client.auth.mfa.listFactors();
+    if(afterError) throw new Error('Unenroll was called; post-removal verification failed: '+afterError.message);
+    const afterSnapshot=validateFactorSnapshot(after);
+    const targetStillPresent=afterSnapshot.all.some(f=>f.id===targetId);
+    const targetNameStillPresent=afterSnapshot.all.some(f=>(f.friendly_name||'').trim()==='Computer Prachi Staging Admin');
+    $('factorDiagnostics').textContent=
+      'POST-REMOVAL VERIFICATION\\nPROJECT: '+PROJECT_REF+
+      '\\nAUTH USER ID: '+user.id+
+      '\\nAGGREGATE all[]: '+afterSnapshot.all.length+
+      '\\nTYPED GROUPS: '+afterSnapshot.typedEntries.map(([type,items])=>type+': '+items.length).join(', ')+
+      '\\nID + METADATA CONSISTENCY: PASS'+
+      '\\nDUPLICATE IDS: NONE'+
+      '\\nTARGET ID PRESENT: '+(targetStillPresent?'YES':'NO')+
+      '\\nTARGET NAME PRESENT: '+(targetNameStillPresent?'YES':'NO');
+    if(targetStillPresent || targetNameStillPresent)
+      throw new Error('Post-removal verification failed: target factor remains. No retry was attempted.');
+    button.hidden=true;
+    $('removeFactorNote').hidden=true;
+    show('REMOVAL VERIFIED: fresh all[] and typed groups are consistent; no duplicates or matching target factor remain. No further Auth action was taken.','ok');
+  }catch(error){
+    show(error?.message||'Security recheck or post-removal verification failed. No automatic retry was attempted.','err');
+  }finally{
+    button.disabled=false;
+    button.textContent=originalLabel;
+  }
+});
+$('refreshBtn').addEventListener('click',async()=>{
+  try{
+    const {error}=await client.auth.refreshSession();
+    if(error)throw error;
+    await checkAal();
+  }catch(error){show(error.message||'Could not refresh staging MFA status.','err');}
+});
+$('logoutBtn').addEventListener('click',async()=>{
+  try{const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;
+    $('authPanel').hidden=true;$('loginPanel').hidden=false;hideMfaPanels();
+    enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
+    $('qr').removeAttribute('src');$('secret').textContent='';$('aal').textContent='Signed out.';
+    show('Signed out from this staging MFA page. Sign in again to fetch a fresh server-side factor list.');
+  }catch(error){show(error.message||'Sign-out failed.','err');}
+});
+if(!projectIdentityIsStaging()){
+  show('STAGING CONFIGURATION CHECK FAILED. Sign-in has been disabled.','err');
+}else if(!window.supabase||typeof window.supabase.createClient!=='function'){
+  show('Supabase Auth client could not be loaded. Check your connection and reload.','err');
+}else{
+  client=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storageKey:'cp-staging-document-locker-mfa-v2'}
+  });
+  show('Staging project identity verified. You can sign in with the staging administrator account.','ok');
+}
+})();
+</script>
+</body>
+</html>

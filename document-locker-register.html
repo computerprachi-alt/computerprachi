@@ -22,7 +22,7 @@ if(password!==confirm){show('Passwords do not match.');return} if(password.lengt
 btn.disabled=true;show('Creating your account…',true);
 try{const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{full_name:fullName,mobile:mobile},emailRedirectTo:new URL('document-locker-dashboard.html',location.href).href}});
 if(error)throw error;
-if(data.session){location.replace('document-locker-dashboard.html');return}
+if(data.session){location.replace('document-locker-recovery-onboarding.html');return}
 show('Account created. Please check your email and complete the Supabase email verification before logging in.',true);form.reset();
 }catch(err){show(err.message||'Registration failed. Please try again.')}finally{btn.disabled=false}});
 </script></body></html>

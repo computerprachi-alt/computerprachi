@@ -1,0 +1,87 @@
+name: Document Locker Recovery Staging Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_staging_only:
+        description: "Type STAGING to confirm this run targets only the disposable staging project"
+        required: true
+        type: string
+      reviewed_commit:
+        description: "Full SHA of the reviewed commit on feature/document-locker-account-recovery"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  staging-integration:
+    if: ${{ inputs.confirm_staging_only == 'STAGING' && inputs.reviewed_commit != '' }}
+    runs-on: ubuntu-latest
+    # Required reviewers and staging-only secrets must be configured in GitHub Settings.
+    environment:
+      name: document-locker-staging
+    steps:
+      - name: Validate reviewed commit input
+        env:
+          REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+        run: |
+          if ! [[ "$REVIEWED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "reviewed_commit must be a full 40-character commit SHA."
+            exit 1
+          fi
+
+      # Environment protection approval happens before this job starts.
+      # Review the exact commit and all tests before approving access to secrets.
+      - name: Checkout exact reviewed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.reviewed_commit }}
+          persist-credentials: false
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Verify reviewed commit is on the recovery feature branch
+        env:
+          REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/compare/feature/document-locker-account-recovery...${REVIEWED_COMMIT}" --jq '.status' | grep -Eq 'identical|behind'
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${REVIEWED_COMMIT}" --jq '.sha' | grep -Fx "$REVIEWED_COMMIT"
+
+      - name: Validate staging-only configuration
+        env:
+          RECOVERY_TEST_ALLOW_STAGING: ${{ vars.RECOVERY_TEST_ALLOW_STAGING }}
+          RECOVERY_TEST_BASE_URL: ${{ vars.RECOVERY_TEST_BASE_URL }}
+          RECOVERY_TEST_ANON_KEY: ${{ secrets.RECOVERY_TEST_ANON_KEY }}
+          RECOVERY_TEST_USER_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_USER_ACCESS_TOKEN }}
+          RECOVERY_TEST_ADMIN_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_ADMIN_ACCESS_TOKEN }}
+        run: |
+          set +x
+          test "$RECOVERY_TEST_ALLOW_STAGING" = "YES" || { echo "Staging opt-in variable must be YES."; exit 1; }
+          test -n "$RECOVERY_TEST_BASE_URL" || { echo "Staging URL is missing."; exit 1; }
+          test -n "$RECOVERY_TEST_ANON_KEY" || { echo "Staging anon key is missing."; exit 1; }
+          test -n "$RECOVERY_TEST_USER_ACCESS_TOKEN" || { echo "Staging test-user token is missing."; exit 1; }
+          test -n "$RECOVERY_TEST_ADMIN_ACCESS_TOKEN" || { echo "Staging AAL2 administrator token is missing."; exit 1; }
+          if [[ ! "$RECOVERY_TEST_BASE_URL" =~ ^https://[a-z0-9-]+\.supabase\.co$ ]] ||
+             [[ "$RECOVERY_TEST_BASE_URL" =~ nnwbezwnwxybwwnhaetw\.supabase\.co|computerprachi\.online ]]; then
+            echo "Refusing a non-staging or known production URL."
+            exit 1
+          fi
+
+      - name: Type-check staging integration tests
+        run: deno check supabase/functions/document-locker-recovery/index.ts supabase/functions/document-locker-recovery/index.test.ts
+
+      - name: Run staging integration tests
+        env:
+          RECOVERY_TEST_ALLOW_STAGING: ${{ vars.RECOVERY_TEST_ALLOW_STAGING }}
+          RECOVERY_TEST_BASE_URL: ${{ vars.RECOVERY_TEST_BASE_URL }}
+          RECOVERY_TEST_ANON_KEY: ${{ secrets.RECOVERY_TEST_ANON_KEY }}
+          RECOVERY_TEST_USER_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_USER_ACCESS_TOKEN }}
+          RECOVERY_TEST_ADMIN_ACCESS_TOKEN: ${{ secrets.RECOVERY_TEST_ADMIN_ACCESS_TOKEN }}
+          RECOVERY_TEST_NEW_PASSWORD: ${{ secrets.RECOVERY_TEST_NEW_PASSWORD }}
+        run: deno test --allow-env --allow-net supabase/functions/document-locker-recovery/index.test.ts
