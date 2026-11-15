@@ -67,6 +67,7 @@ button.secondary{background:#e8edf5;color:#26344e}button:disabled{opacity:.55;cu
 <button id="challengeBtn" type="submit">Verify TOTP and check AAL2</button>
 </form>
 </div>
+<button id="startEnrollmentBtn" class="secondary" type="button" hidden>Start new TOTP enrollment</button>
 <button id="refreshBtn" class="secondary" type="button">Refresh AAL status</button>
 <button id="logoutBtn" class="secondary" type="button">Sign out</button>
 </section>
@@ -122,7 +123,7 @@ function validateFactorSnapshot(factors){
   if(idsAll.length!==idsTyped.length || idsAll.some(id=>!idsTyped.includes(id)) || idsTyped.some(id=>!idsAll.includes(id)))
     throw new Error('Aggregate all[] and typed factor groups do not contain the same IDs.');
   for(const item of typed){
-    if(item.f.factor_type && item.f.factor_type!==item.type)
+    if(!item.f.factor_type || item.f.factor_type!==item.type)
       throw new Error('Typed factor group metadata does not match factor_type.');
     const aggregate=all.find(f=>f.id===item.f.id);
     if(!aggregate || factorMetadata(aggregate)!==factorMetadata(item.f))
@@ -169,6 +170,7 @@ async function checkAal(){
   checkingMfa=true;
   setBusy('refreshBtn',true,'Refresh AAL and MFA factors');
   try{
+    $('startEnrollmentBtn').hidden=true;
     if(!projectIdentityIsStaging()) throw new Error('Staging URL/ref mismatch. MFA diagnostics are blocked.');
     const {session:sessionData,user:userData}=await getFreshVerifiedIdentity();
     const sessionUserId=sessionData.user.id;
@@ -298,72 +300,82 @@ async function checkAal(){
       return;
     }
 
-    // An empty fresh server-side factor list means any prior in-memory
-    // enrollment was removed or is stale. Discard its QR/challenge state.
+    // An empty factor list is diagnostic information only. It never
+    // authorizes an Auth mutation from login, refresh, or checkAal().
     enrollmentFactorId=null;enrollmentChallengeId=null;challengeFactorId=null;challengeId=null;
     hideMfaPanels();
     $('qr').removeAttribute('src');$('secret').textContent='';
     qrRenderFailed=false;
-    show('No TOTP factor was returned by the fresh Auth check. Starting one new staging enrollment…');
-    const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
-      factorType:'totp',
-      friendlyName:'Computer Prachi Staging Admin'
-    });
-    if(enrollError){
-      const {data:afterData,error:afterError}=await client.auth.mfa.listFactors();
-      if(afterError)throw new Error(enrollError.message+' | Follow-up factor check failed: '+afterError.message);
-      const afterGroups=Object.entries(afterData||{}).filter(([key,value])=>key!=='all' && Array.isArray(value));
-      const afterAll=Array.isArray(afterData?.all)?afterData.all:[];
-      const afterGrouped=afterGroups.flatMap(([,items])=>items);
-      const afterMap=new Map();
-      for(const factor of [...afterAll,...afterGrouped])if(factor?.id)afterMap.set(factor.id,factor);
-      const afterFactors=[...afterMap.values()];
-      const afterMatches=afterFactors.filter(f=>(f.friendly_name||'').trim()==='Computer Prachi Staging Admin');
-      const afterTypes=afterGroups.map(([type,items])=>type+': '+items.length).join(', ')||'none';
-      $('factorDiagnostics').textContent=
-        'IDENTITY CHECK: PASS\\nENROLL RESULT: FAILED\\nFOLLOW-UP FACTOR GROUPS: '+afterTypes+
-        '\\nFOLLOW-UP all[]: '+(Array.isArray(afterData?.all)?'available ('+afterAll.length+')':'MISSING')+
-        '\\nEXACT FRIENDLY-NAME MATCHES: '+afterMatches.length+
-        (afterMatches.length?' — '+afterMatches.map(f=>(f.factor_type||'unknown')+'/'+(f.status||'unknown')).join(', '):' — none visible');
-      hideMfaPanels();
-      show(enrollError.message+'\\nNo QR was created. Follow-up factor diagnostics are shown above. No automatic retry or alternate friendly name was used.','err');
-      return;
-    }
-    if(!enrollment?.id || !enrollment?.totp?.qr_code || !enrollment?.totp?.secret){
-      hideMfaPanels();
-      throw new Error('Supabase enroll() returned an incomplete TOTP response (missing factor ID, QR SVG, or manual setup key). No enrollment panel will be shown.');
-    }
-
-    enrollmentFactorId=enrollment.id;
-    $('enrollPanel').hidden=false;$('challengePanel').hidden=true;
-    const qrSvg=String(enrollment.totp.qr_code).trim();
-    $('qr').onerror=()=>{
-      qrRenderFailed=true;$('qr').hidden=true;
-      show('Supabase created the TOTP factor, but this browser could not render its QR SVG. The manual setup key remains available below. Do not share it.','err');
-    };
-    $('qr').onload=()=>{qrRenderFailed=false;};
-    $('qr').src=qrSvg.startsWith('data:image/')
-      ? qrSvg
-      : 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qrSvg);
-    $('qr').hidden=false;
-    // Never render or log the raw TOTP secret/manual setup key.
-    $('secret').textContent='';
-    $('secret').hidden=true;
-
-    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
-    if(challengeError){
-      enrollmentChallengeId=null;
-      show('TOTP factor and QR code were created, but challenge creation failed: '+challengeError.message+'\nThe QR/manual key is still shown. Use Refresh after checking the staging Auth status.','err');
-      return;
-    }
-    enrollmentChallengeId=challenge.id;
-    show('TOTP enrollment started successfully. Scan the QR code, then enter the current six-digit code to activate the factor. Do not share the QR code or manual key.');
+    $('startEnrollmentBtn').hidden=false;
+    show('No TOTP factor was returned by the fresh Auth check. Enrollment is available only through the separate explicit button.');
+    return;
   }catch(error){
     hideMfaPanels();
     show(error?.message||'Staging MFA check failed. No QR enrollment panel is being shown.','err');
   }finally{
     checkingMfa=false;
     setBusy('refreshBtn',false,'Refresh AAL and MFA factors');
+  }
+}
+async function startEnrollment(){
+  const button=$('startEnrollmentBtn');
+  if(button.disabled || checkingMfa)return;
+  button.disabled=true;
+  const originalLabel=button.textContent;
+  button.textContent='Rechecking security before enrollment…';
+  $('startEnrollmentBtn').hidden=true;
+  try{
+    if(!projectIdentityIsStaging())
+      throw new Error('Staging URL/ref mismatch. Enrollment blocked.');
+    const {session,user}=await getFreshVerifiedIdentity();
+    if(!session?.user?.id || session.user.id!==user.id)
+      throw new Error('Fresh session user ID and Auth user ID do not match.');
+    const {data:factors,error:factorError}=await client.auth.mfa.listFactors();
+    if(factorError)throw factorError;
+    const snapshot=validateFactorSnapshot(factors);
+    if(snapshot.all.length!==0)
+      throw new Error('One or more Auth factors already exist. New enrollment is blocked; refresh diagnostics.');
+    const {data:aalData,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(aalError)throw aalError;
+    if(aalData?.currentLevel!=='aal1')
+      throw new Error('Current AAL must be aal1 before explicit enrollment.');
+    if(!projectIdentityIsStaging())
+      throw new Error('Staging URL/ref mismatch on final check. Enrollment blocked.');
+    const {data:enrollment,error:enrollError}=await client.auth.mfa.enroll({
+      factorType:'totp',
+      friendlyName:'Computer Prachi Staging Admin'
+    });
+    if(enrollError)throw enrollError;
+    if(!enrollment?.id || !enrollment?.totp?.qr_code || !enrollment?.totp?.secret)
+      throw new Error('Explicit enrollment returned incomplete factor/QR/secret data. Do not retry automatically.');
+    enrollmentFactorId=enrollment.id;
+    enrollmentChallengeId=null;
+    challengeFactorId=null;challengeId=null;
+    $('enrollPanel').hidden=false;
+    $('challengePanel').hidden=true;
+    const qrSvg=String(enrollment.totp.qr_code).trim();
+    $('qr').onerror=()=>{
+      qrRenderFailed=true;$('qr').hidden=true;
+      show('TOTP enrollment succeeded, but the QR image could not be rendered. Do not retry automatically.','err');
+    };
+    $('qr').onload=()=>{qrRenderFailed=false;};
+    $('qr').src=qrSvg.startsWith('data:image/')
+      ? qrSvg
+      : 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qrSvg);
+    $('qr').hidden=false;
+    $('secret').textContent='';
+    $('secret').hidden=true;
+    const {data:challenge,error:challengeError}=await client.auth.mfa.challenge({factorId:enrollmentFactorId});
+    if(challengeError)throw new Error('Enrollment succeeded, but challenge creation failed: '+challengeError.message+'. Do not enroll again.');
+    enrollmentChallengeId=challenge.id;
+    show('Explicit TOTP enrollment succeeded. Scan the QR code and verify it using the enrollment form.');
+  }catch(error){
+    hideMfaPanels();
+    $('qr').removeAttribute('src');$('secret').textContent='';
+    show(error?.message||'Explicit TOTP enrollment failed. No automatic retry was attempted.','err');
+  }finally{
+    button.disabled=false;
+    button.textContent=originalLabel;
   }
 }
 async function verifyAal2(){
@@ -415,6 +427,7 @@ $('selectVerifiedFactorBtn').addEventListener('click',async()=>{
   }catch(error){challengeFactorId=null;challengeId=null;show(error?.message||'Factor selection validation failed.','err');}
   finally{button.disabled=false;}
 });
+$('startEnrollmentBtn').addEventListener('click',startEnrollment);
 $('enrollVerifyForm').addEventListener('submit',async event=>{
   event.preventDefault();
   const code=$('enrollCode').value.trim();
